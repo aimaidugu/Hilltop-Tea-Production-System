@@ -1,0 +1,20 @@
+{
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "30mb" }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/public/(.*)",
+      "dest": "/public/$1",
+      "headers": { "Cache-Control": "public, max-age=31536000, immutable" }
+    },
+    { "src": "/(.*)", "dest": "/api/index.py" }
+  ],
+  "env": {
+    "FLASK_ENV": "production"
+  }
+}

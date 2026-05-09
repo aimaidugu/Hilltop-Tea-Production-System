@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Hilltop Tea</title>
+
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'tea-green':  '#1e3932',
+              'tea-mid':    '#2d5a4b',
+              'tea-gold':   '#c9a96e',
+              'tea-cream':  '#f5f2eb',
+              'tea-dark':   '#2c3e50',
+              'tea-muted':  '#6c757d',
+              'tea-danger': '#c0392b',
+              'tea-good':   '#27ae60',
+            },
+            fontFamily: {
+              display: ['"Cormorant Garamond"', 'Georgia', 'serif'],
+              body:    ['"DM Sans"', 'system-ui', 'sans-serif'],
+              mono:    ['"DM Mono"', '"Courier New"', 'monospace'],
+            },
+          }
+        }
+      }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Custom brand CSS -->
+    <link rel="stylesheet" href="{{ static_url('css/style.css') }}">
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<body class="login-container">
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="container mt-4">
+                {% for category, message in messages %}
+                    <div x-data="flashMessage()" x-show="show" x-transition
+                         class="flash-message flash-{{ category }}">
+                        <span>{{ message }}</span>
+                        <button @click="show = false" class="flash-close">&times;</button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="login-card">
+        <h1 class="login-title">HILLTOP TEA</h1>
+        <p class="login-subtitle">Wage Tracking & Payroll System</p>
+
+        <form method="POST" action="{{ url_for('auth.login') }}">
+            {{ form.hidden_tag() }}
+
+            <div class="mb-4">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" id="username" name="username"
+                       class="form-control w-full"
+                       value="{{ form.username.data or '' }}"
+                       required autofocus>
+                {% if form.username.errors %}
+                    <p class="text-tea-danger text-sm mt-1">{{ form.username.errors[0] }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" id="password" name="password"
+                       class="form-control w-full"
+                       required>
+                {% if form.password.errors %}
+                    <p class="text-tea-danger text-sm mt-1">{{ form.password.errors[0] }}</p>
+                {% endif %}
+            </div>
+
+            <button type="submit" class="btn btn-gold w-full">
+                Log In
+            </button>
+        </form>
+
+        <p class="text-center mt-4 text-tea-muted text-sm">
+            Default credentials: admin / admin123
+        </p>
+    </div>
+
+    <script src="{{ static_url('js/hilltop.js') }}"></script>
+</body>
+</html>

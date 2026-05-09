@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Payroll — Hilltop Tea{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">Monthly Payroll</h1>
+    <div class="d-flex gap-2 align-items-center">
+        <label for="month-picker" class="form-label mb-0">Month:</label>
+        <input type="month" id="month-picker"
+               class="form-control"
+               value="{{ month_str }}"
+               onchange="window.location.href='?month=' + this.value + (('{{ group_filter }}' ? '&group={{ group_filter }}' : ''))">
+
+        <select class="form-control form-select"
+                onchange="window.location.href='?month={{ month_str }}&group=' + this.value">
+            <option value="">All Groups</option>
+            <option value="production" {{ 'selected' if group_filter == 'production' else '' }}>
+                Production
+            </option>
+            <option value="wrapping" {{ 'selected' if group_filter == 'wrapping' else '' }}>
+                Wrapping
+            </option>
+        </select>
+
+        <a href="{{ url_for('reports.wage_sheet_pdf', month=month_str, group=group_filter) }}"
+           class="btn btn-gold"
+           target="_blank">
+            Export PDF
+        </a>
+    </div>
+</div>
+
+<!-- Month Navigation -->
+<div class="d-flex justify-content-center gap-4 mb-4">
+    {% if prev_month %}
+    <a href="?month={{ prev_month }}&group={{ group_filter or '' }}" class="btn btn-sm btn-green-outline">
+        &larr; {{ prev_month }}
+    </a>
+    {% endif %}
+    <span class="align-self-center font-semibold">
+        {{ month_str|replace('-', ' ')|title }}
+    </span>
+    {% if next_month %}
+    <a href="?month={{ next_month }}&group={{ group_filter or '' }}" class="btn btn-sm btn-green-outline">
+        {{ next_month }} &rarr;
+    </a>
+    {% endif %}
+</div>
+
+{% if payroll_data %}
+<div class="card">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Employee</th>
+                <th>Group</th>
+                <th class="text-right">Cartons</th>
+                <th class="text-right">Wage (₦)</th>
+                <th class="text-right">Paid (₦)</th>
+                <th class="text-right">Balance (₦)</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in payroll_data %}
+            <tr>
+                <td>{{ row.name }}</td>
+                <td>
+                    <span class="badge badge-{{ row.group }}">
+                        {{ row.group|title }}
+                    </span>
+                </td>
+                <td class="currency">{{ row.cartons }}</td>
+                <td class="currency">₦{{ "{:,.2f}".format(row.wage) }}</td>
+                <td class="currency">₦{{ "{:,.2f}".format(row.paid) }}</td>
+                <td class="currency {{ 'balance-owed' if row.balance > 0 else 'balance-credit' if row.balance < 0 else 'balance-zero' }}">
+                    ₦{{ "{:,.2f}".format(row.balance) }}
+                </td>
+                <td>
+                    <button @click="$dispatch('open-payment-modal', {id: {{ row.id }}, name: '{{ row.name }}', month: '{{ month_str }}'})"
+                            class="btn btn-sm btn-gold">
+                        Record Payment
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="background-color: var(--tea-gold); font-weight: bold;">
+                <td colspan="2">GRAND TOTALS</td>
+                <td class="currency">{{ grand_totals.cartons }}</td>
+                <td class="currency">₦{{ "{:,.2f}".format(grand_totals.wage) }}</td>
+                <td class="currency">₦{{ "{:,.2f}".format(grand_totals.paid) }}</td>
+                <td class="currency {{ 'balance-owed' if grand_totals.balance > 0 else 'balance-credit' if grand_totals.balance < 0 else 'balance-zero' }}">
+                    ₦{{ "{:,.2f}".format(grand_totals.balance) }}
+                </td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% else %}
+<div class="card text-center py-8">
+    <p class="text-tea-muted mb-4">
+        No payroll data for {{ month_str|replace('-', ' ')|title }}.
+    </p>
+    <a href="{{ url_for('production.daily_production') }}" class="btn btn-gold">
+        Enter Production Data
+    </a>
+</div>
+{% endif %}
+
+<!-- Payment Modal -->
+<div x-data="paymentModal()"
+     @open-payment-modal.window="openFor($event.detail.id, $event.detail.name, $event.detail.month)"
+     x-show="open"
+     x-transition
+     class="modal-overlay"
+     style="display: none;">
+    <div class="modal-card" @click.away="close()">
+        <div class="modal-header">Record Payment</div>
+
+        <form method="POST" action="{{ url_for('payroll.record_payment', employee_id=0) }}">
+            <input type="hidden" name="employee_id" :value="employeeId">
+
+            <div class="mb-4">
+                <label class="form-label">Employee</label>
+                <input type="text" class="form-control w-full" :value="employeeName" readonly>
+            </div>
+
+            <div class="mb-4">
+                <label for="amount" class="form-label">Amount (₦)</label>
+                <input type="number" id="amount" name="amount"
+                       class="form-control w-full"
+                       step="0.01" min="0.01" required>
+            </div>
+
+            <div class="mb-4">
+                <label for="payment_date" class="form-label">Payment Date</label>
+                <input type="date" id="payment_date" name="payment_date"
+                       class="form-control w-full"
+                       value="{{ month_str }}-01" required>
+            </div>
+
+            <div class="mb-4">
+                <label for="notes" class="form-label">Notes (Optional)</label>
+                <textarea id="notes" name="notes"
+                          class="form-control w-full"
+                          rows="3"></textarea>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" @click="close()" class="btn btn-green-outline">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-gold">
+                    Record Payment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

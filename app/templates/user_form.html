@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — Hilltop Tea{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">{{ title }}</div>
+
+            <form method="POST">
+                {{ form.hidden_tag() }}
+
+                <div class="mb-4">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" id="username" name="username"
+                           class="form-control w-full"
+                           value="{{ form.username.data or '' }}"
+                           required minlength="3" maxlength="80">
+                    {% if form.username.errors %}
+                        <p class="text-tea-danger text-sm mt-1">{{ form.username.errors[0] }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="mb-4">
+                    <label for="role" class="form-label">Role</label>
+                    <select id="role" name="role" class="form-control w-full form-select" required>
+                        <option value="">Select role...</option>
+                        <option value="admin" {{ 'selected' if form.role.data == 'admin' else '' }}>
+                            Administrator
+                        </option>
+                        <option value="gm" {{ 'selected' if form.role.data == 'gm' else '' }}>
+                            General Manager
+                        </option>
+                        <option value="supervisor" {{ 'selected' if form.role.data == 'supervisor' else '' }}>
+                            Supervisor
+                        </option>
+                    </select>
+                    {% if form.role.errors %}
+                        <p class="text-tea-danger text-sm mt-1">{{ form.role.errors[0] }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="mb-4">
+                    <label for="password" class="form-label">
+                        Password {% if is_edit %}(leave blank to keep current){% endif %}
+                    </label>
+                    <input type="password" id="password" name="password"
+                           class="form-control w-full"
+                           {% if not is_edit %}required{% endif %}
+                           minlength="8">
+                    {% if form.password.errors %}
+                        <p class="text-tea-danger text-sm mt-1">{{ form.password.errors[0] }}</p>
+                    {% endif %}
+                </div>
+
+                {% if not is_edit %}
+                <div class="mb-4">
+                    <label for="confirm_password" class="form-label">Confirm Password</label>
+                    <input type="password" id="confirm_password" name="confirm_password"
+                           class="form-control w-full"
+                           required minlength="8">
+                    {% if form.confirm_password.errors %}
+                        <p class="text-tea-danger text-sm mt-1">{{ form.confirm_password.errors[0] }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-gold">
+                        Save User
+                    </button>
+                    <a href="{{ url_for('users.list_users') }}" class="btn btn-green-outline">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

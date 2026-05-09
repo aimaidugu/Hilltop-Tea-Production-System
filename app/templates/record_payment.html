@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Record Payment — Hilltop Tea{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Record Payment for {{ employee.name }}</div>
+
+            <form method="POST">
+                {{ form.hidden_tag() }}
+
+                <div class="mb-4">
+                    <label class="form-label">Employee</label>
+                    <input type="text" class="form-control w-full"
+                           value="{{ employee.name }}" readonly>
+                </div>
+
+                <div class="mb-4">
+                    <label for="amount" class="form-label">Payment Amount (₦)</label>
+                    <input type="number" id="amount" name="amount"
+                           class="form-control w-full"
+                           step="0.01" min="0.01"
+                           value="{{ form.amount.data or '' }}"
+                           required>
+                    {% if form.amount.errors %}
+                        <p class="text-tea-danger text-sm mt-1">{{ form.amount.errors[0] }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="mb-4">
+                    <label for="payment_date" class="form-label">Payment Date</label>
+                    <input type="date" id="payment_date" name="payment_date"
+                           class="form-control w-full"
+                           value="{{ form.payment_date.data.strftime('%Y-%m-%d') if form.payment_date.data else '' }}"
+                           required>
+                    {% if form.payment_date.errors %}
+                        <p class="text-tea-danger text-sm mt-1">{{ form.payment_date.errors[0] }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="mb-4">
+                    <label for="notes" class="form-label">Notes (Optional)</label>
+                    <textarea id="notes" name="notes"
+                              class="form-control w-full"
+                              rows="3">{{ form.notes.data or '' }}</textarea>
+                    {% if form.notes.errors %}
+                        <p class="text-tea-danger text-sm mt-1">{{ form.notes.errors[0] }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-gold">
+                        Record Payment
+                    </button>
+                    <a href="{{ url_for('payroll.payroll_view', month=month_str) }}" class="btn btn-green-outline">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

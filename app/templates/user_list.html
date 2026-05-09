@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Users — Hilltop Tea{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">User Management</h1>
+    <a href="{{ url_for('users.add_user') }}" class="btn btn-gold">
+        Add User
+    </a>
+</div>
+
+{% if users %}
+<div class="card">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Last Login</th>
+                <th>Password Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.username }}</td>
+                <td>
+                    <span class="badge badge-{{ user.role }}">
+                        {{ user.role|upper }}
+                    </span>
+                </td>
+                <td>
+                    {% if user.last_login %}
+                    {{ user.last_login.strftime('%d %b %Y, %H:%M') }}
+                    {% else %}
+                    <span class="text-tea-muted">Never</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if user.must_change_password %}
+                    <span class="badge badge-admin">Must Change</span>
+                    {% else %}
+                    <span class="text-tea-good">OK</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('users.edit_user', id=user.id) }}"
+                           class="btn btn-sm btn-green-outline">
+                            Edit
+                        </a>
+                        <form method="POST" action="{{ url_for('users.delete_user', id=user.id) }}"
+                              onsubmit="return confirm('Delete user {{ user.username }}? This cannot be undone.');">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    {{ 'disabled' if user.id == current_user.id else '' }}>
+                                Delete
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if pagination.pages > 1 %}
+<div class="d-flex justify-content-center gap-2 mt-4">
+    {% if pagination.has_prev %}
+    <a href="{{ url_for(request.endpoint, page=pagination.prev_num) }}"
+       class="btn btn-sm btn-green-outline">
+        Previous
+    </a>
+    {% endif %}
+
+    <span class="align-self-center">
+        Page {{ pagination.page }} of {{ pagination.pages }}
+    </span>
+
+    {% if pagination.has_next %}
+    <a href="{{ url_for(request.endpoint, page=pagination.next_num) }}"
+       class="btn btn-sm btn-green-outline">
+        Next
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card text-center py-8">
+    <p class="text-tea-muted mb-4">No users found.</p>
+    <a href="{{ url_for('users.add_user') }}" class="btn btn-gold">
+        Add First User
+    </a>
+</div>
+{% endif %}
+{% endblock %}

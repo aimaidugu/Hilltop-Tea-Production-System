@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Hilltop Tea{% endblock %}</title>
+
+    <!-- Tailwind CSS Play CDN — acceptable for this scale, DO NOT use in high-traffic SaaS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tailwind brand config — must come AFTER the CDN script -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'tea-green':  '#1e3932',
+              'tea-mid':    '#2d5a4b',
+              'tea-gold':   '#c9a96e',
+              'tea-cream':  '#f5f2eb',
+              'tea-dark':   '#2c3e50',
+              'tea-muted':  '#6c757d',
+              'tea-danger': '#c0392b',
+              'tea-good':   '#27ae60',
+            },
+            fontFamily: {
+              display: ['"Cormorant Garamond"', 'Georgia', 'serif'],
+              body:    ['"DM Sans"', 'system-ui', 'sans-serif'],
+              mono:    ['"DM Mono"', '"Courier New"', 'monospace'],
+            },
+          }
+        }
+      }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Custom brand CSS -->
+    <link rel="stylesheet" href="{{ static_url('css/style.css') }}">
+
+    <!-- Alpine.js — deferred, pinned version -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-tea-cream min-h-screen">
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="container mt-4">
+                {% for category, message in messages %}
+                    <div x-data="flashMessage()" x-show="show" x-transition
+                         class="flash-message flash-{{ category }}">
+                        <span>{{ message }}</span>
+                        <button @click="show = false" class="flash-close">&times;</button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Navbar -->
+    {% if current_user.is_authenticated %}
+    <nav class="navbar">
+        <div class="container d-flex align-items-center justify-content-between" style="height: 60px;">
+            <a href="{{ url_for('main.index') }}" class="navbar-brand">HILLTOP TEA</a>
+
+            <div class="d-flex align-items-center gap-4">
+                <a href="{{ url_for('main.index') }}" class="nav-link {{ 'active' if request.endpoint == 'main.index' else '' }}">Dashboard</a>
+
+                {% if current_user.role in ['admin', 'gm', 'supervisor'] %}
+                <a href="{{ url_for('production.daily_production') }}" class="nav-link {{ 'active' if request.endpoint.startswith('production.') else '' }}">Production</a>
+                {% endif %}
+
+                <a href="{{ url_for('payroll.payroll_view') }}" class="nav-link {{ 'active' if request.endpoint.startswith('payroll.') else '' }}">Payroll</a>
+
+                {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('employees.list_employees') }}" class="nav-link {{ 'active' if request.endpoint.startswith('employees.') else '' }}">Employees</a>
+                <a href="{{ url_for('users.list_users') }}" class="nav-link {{ 'active' if request.endpoint.startswith('users.') else '' }}">Users</a>
+                {% endif %}
+
+                <!-- User Dropdown -->
+                <div x-data="navDropdown()" class="relative">
+                    <button @click="toggle()" @click.away="close()"
+                            class="nav-link d-flex align-items-center gap-2">
+                        <span>{{ current_user.username }}</span>
+                        <span class="badge badge-{{ current_user.role }}">{{ current_user.role|upper }}</span>
+                        <svg x-show="!open" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                        <svg x-show="open" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: none;">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                        </svg>
+                    </button>
+
+                    <div x-show="open" x-transition
+                         class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50"
+                         style="display: none;">
+                        <a href="{{ url_for('auth.change_password') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Change Password</a>
+                        <div class="border-t border-gray-200 my-1"></div>
+                        <a href="{{ url_for('auth.logout') }}" class="block px-4 py-2 text-red-600 hover:bg-gray-100">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="container py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-6 text-tea-muted text-sm">
+        <p>&copy; {{ now().year }} Hilltop Tea. All rights reserved.</p>
+    </footer>
+
+    <!-- Chart.js initialisers per page -->
+    {% block charts_js %}{% endblock %}
+
+    <!-- Custom JS -->
+    <script src="{{ static_url('js/hilltop.js') }}"></script>
+</body>
+</html>
