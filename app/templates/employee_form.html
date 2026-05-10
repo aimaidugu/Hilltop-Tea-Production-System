@@ -1,53 +1,51 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} — Hilltop Tea{% endblock %}
+{% block title %}{{ title }} - Hilltop Tea{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">{{ title }}</div>
-
-            <form method="POST">
-                {{ form.hidden_tag() }}
-
-                <div class="mb-4">
-                    <label for="name" class="form-label">Full Name</label>
-                    <input type="text" id="name" name="name"
-                           class="form-control w-full"
-                           value="{{ form.name.data or '' }}"
-                           required minlength="2" maxlength="120">
-                    {% if form.name.errors %}
-                        <p class="text-tea-danger text-sm mt-1">{{ form.name.errors[0] }}</p>
-                    {% endif %}
-                </div>
-
-                <div class="mb-4">
-                    <label for="group" class="form-label">Worker Group</label>
-                    <select id="group" name="group" class="form-control w-full form-select" required>
-                        <option value="">Select group...</option>
-                        <option value="production" {{ 'selected' if form.group.data == 'production' else '' }}>
-                            Production (Maisa Machine Operators)
-                        </option>
-                        <option value="wrapping" {{ 'selected' if form.group.data == 'wrapping' else '' }}>
-                            Wrapping (Tea Capsule Team)
-                        </option>
-                    </select>
-                    {% if form.group.errors %}
-                        <p class="text-tea-danger text-sm mt-1">{{ form.group.errors[0] }}</p>
-                    {% endif %}
-                </div>
-
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-gold">
-                        Save Employee
-                    </button>
-                    <a href="{{ url_for('employees.list_employees') }}" class="btn btn-green-outline">
-                        Cancel
-                    </a>
-                </div>
-            </form>
+<div class="max-w-md mx-auto">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">{{ title }}</h2>
         </div>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="name" class="form-label">Full Name</label>
+                <input type="text" id="name" name="name" class="form-control"
+                       value="{{ form.name.data or '' }}" required minlength="2" maxlength="120">
+                {% if form.name.errors %}
+                    <p class="text-tea-danger text-sm mt-1">
+                        {% for error in form.name.errors %}{{ error }}{% endfor %}
+                    </p>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="group" class="form-label">Worker Group</label>
+                <select id="group" name="group" class="form-control form-select" required>
+                    <option value="">Select group...</option>
+                    <option value="production" {{ 'selected' if form.group.data == 'production' else '' }}>
+                        Production (Maisa Machine)
+                    </option>
+                    <option value="wrapping" {{ 'selected' if form.group.data == 'wrapping' else '' }}>
+                        Wrapping (Tea Capsules)
+                    </option>
+                </select>
+                {% if form.group.errors %}
+                    <p class="text-tea-danger text-sm mt-1">
+                        {% for error in form.group.errors %}{{ error }}{% endfor %}
+                    </p>
+                {% endif %}
+            </div>
+
+            <div class="flex space-x-4">
+                <a href="{{ url_for('employees.index') }}" class="btn btn-green-outline">Cancel</a>
+                <button type="submit" class="btn btn-gold">Save Employee</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}

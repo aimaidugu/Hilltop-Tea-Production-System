@@ -1,10 +1,9 @@
 """
 Hilltop Tea — Production Entry Blueprint.
 
-Handles daily production record entry and history viewing.
-Supervisor and Admin access.
+Handles daily production record entry and history.
 """
-from datetime import datetime, timedelta
+from datetime import date
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -12,7 +11,7 @@ from flask_login import current_user, login_required
 from app import db
 from app.forms import ProductionEntryForm
 from app.models import Employee, ProductionRecord
-from app.utils import month_range, paginate, require_role
+from app.utils import flash_error, flash_success, paginate, require_role
 from app.wage_calculator import WageCalculator
 
 production_bp = Blueprint('production', __name__)
@@ -21,30 +20,28 @@ production_bp = Blueprint('production', __name__)
 @production_bp.route('/', methods=['GET', 'POST'])
 @login_required
 @require_role('supervisor', 'admin')
-def daily_production():
+def index():
     """
-    Handle daily production entry.
+    Daily production entry form.
 
     GET: Render form with today's records pre-filled.
-    POST: Save or update production records for today.
-
-    Supervisors can only submit for today. Admins can select date.
+    POST: Save production data for all active employees.
     """
     form = ProductionEntryForm()
 
-    # Determine date to use
+    # Determine date (supervisors only see today, admins can select)
     if current_user.role == 'admin':
         date_str = request.args.get('date')
         if date_str:
             try:
-                selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                entry_date = date.fromisoformat(date_str)
             except ValueError:
-                flash('Invalid date format. Using today.', 'warning')
-                selected_date = datetime.utcnow().date()
+                entry_date = date.today()
+                flash_error('Invalid date format. Using today.')
         else:
-            selected_date = datetime.utcnow().date()
+            entry_date = date.today()
     else:
-        selected_date = datetime.utcnow().date()
+        entry_date = date.today()
 
     # Get all active employees
     employees = Employee.query.filter_by(active=True).order_by(Employee.name).all()
@@ -52,18 +49,10 @@ def daily_production():
     # Get existing records for this date
     existing_records = {
         r.employee_id: r
-        for r in ProductionRecord.query.filter_by(date=selected_date).all()
+        for r in ProductionRecord.query.filter_by(date=entry_date).all()
     }
 
-    # Pre-fill form data
-    if request.method == 'GET':
-        for emp in employees:
-            if emp.id in existing_records:
-                setattr(form, f'cartons_{emp.id}', existing_records[emp.id].cartons)
-            else:
-                setattr(form, f'cartons_{emp.id}', 0)
-
-    if form.validate_on_submit() and request.method == 'POST':
+    if form.validate_on_submit():
         # ═══════════════════════════════════════════════════════════════
         # PPP: save_daily_production
         # ═══════════════════════════════════════════════════════════════
@@ -99,37 +88,38 @@ def daily_production():
         errors = []
 
         try:
-            for emp in employees:
-                cartons_field = f'cartons_{emp.id}'
-                cartons_str = request.form.get(cartons_field, '0')
+            for employee in employees:
+                field_name = f'cartons_{employee.id}'
+                cartons_str = request.form.get(field_name, '0')
 
                 try:
                     cartons = int(cartons_str)
-                except (ValueError, TypeError):
-                    errors.append(f'Invalid carton count for {emp.name}')
+                except ValueError:
+                    errors.append(f'Invalid carton count for {employee.name}')
                     continue
 
                 if cartons < 0:
-                    errors.append(f'Negative cartons for {emp.name}')
+                    errors.append(f'Cartons cannot be negative for {employee.name}')
                     continue
 
                 if cartons == 0:
-                    existing = existing_records.get(emp.id)
+                    # Skip zero carton entries
+                    existing = existing_records.get(employee.id)
                     if existing:
                         db.session.delete(existing)
                     continue
 
-                wage = calc.calculate_daily(emp, cartons)
+                wage = calc.calculate_daily(employee, cartons)
 
-                existing = existing_records.get(emp.id)
+                existing = existing_records.get(employee.id)
                 if existing:
                     existing.cartons = cartons
                     existing.daily_wage = wage
                     existing.created_by = current_user.id
                 else:
                     record = ProductionRecord(
-                        employee_id=emp.id,
-                        date=selected_date,
+                        employee_id=employee.id,
+                        date=entry_date,
                         cartons=cartons,
                         daily_wage=wage,
                         created_by=current_user.id
@@ -141,58 +131,63 @@ def daily_production():
             if errors:
                 db.session.rollback()
                 for error in errors:
-                    flash(error, 'danger')
-                return render_template('production_entry.html',
-                                      form=form,
-                                      employees=employees,
-                                      selected_date=selected_date,
-                                      existing_records=existing_records)
+                    flash_error(error)
+                return render_template(
+                    'production_entry.html',
+                    form=form,
+                    employees=employees,
+                    entry_date=entry_date,
+                    existing_records=existing_records,
+                )
 
             db.session.commit()
-            flash(f'Production saved for {saved} employees.', 'success')
-            return redirect(url_for('production.daily_production',
-                                    date=selected_date.strftime('%Y-%m-%d')))
+            flash_success(f'Production saved for {saved} employees.')
+            return redirect(url_for('production.index', date=entry_date.isoformat()))
 
         except Exception as e:
             db.session.rollback()
-            flash(f'Error saving production: {str(e)}', 'danger')
-            return render_template('production_entry.html',
-                                  form=form,
-                                  employees=employees,
-                                  selected_date=selected_date,
-                                  existing_records=existing_records)
+            flash_error(f'Error saving production: {str(e)}')
+            return render_template(
+                'production_entry.html',
+                form=form,
+                employees=employees,
+                entry_date=entry_date,
+                existing_records=existing_records,
+            )
 
-    return render_template('production_entry.html',
-                          form=form,
-                          employees=employees,
-                          selected_date=selected_date,
-                          existing_records=existing_records)
+    return render_template(
+        'production_entry.html',
+        form=form,
+        employees=employees,
+        entry_date=entry_date,
+        existing_records=existing_records,
+    )
 
 
 @production_bp.route('/history')
 @login_required
 @require_role('admin', 'gm')
-def production_history():
+def history():
     """
-    Display paginated production history with date and employee filters.
+    Production history view.
 
-    Admin and GM only.
+    GET: Render paginated table of all production records with filters.
     """
     page = request.args.get('page', 1, type=int)
     date_filter = request.args.get('date')
-    employee_filter = request.args.get('employee', type=int)
+    employee_filter = request.args.get('employee')
 
     query = ProductionRecord.query.join(Employee)
 
     if date_filter:
         try:
-            filter_date = datetime.strptime(date_filter, '%Y-%m-%d').date()
+            filter_date = date.fromisoformat(date_filter)
             query = query.filter(ProductionRecord.date == filter_date)
         except ValueError:
             pass
 
     if employee_filter:
-        query = query.filter(ProductionRecord.employee_id == employee_filter)
+        query = query.filter(Employee.id == employee_filter)
 
     query = query.order_by(ProductionRecord.date.desc(), Employee.name)
     pagination = paginate(query, page)
@@ -200,9 +195,10 @@ def production_history():
     # Get all employees for filter dropdown
     all_employees = Employee.query.filter_by(active=True).order_by(Employee.name).all()
 
-    return render_template('production_history.html',
-                          records=pagination.items,
-                          pagination=pagination,
-                          date_filter=date_filter,
-                          employee_filter=employee_filter,
-                          all_employees=all_employees)
+    return render_template(
+        'production_history.html',
+        pagination=pagination,
+        all_employees=all_employees,
+        date_filter=date_filter,
+        employee_filter=employee_filter,
+    )

@@ -2,46 +2,45 @@
 Hilltop Tea — Database Models.
 
 All SQLAlchemy models with Google-style docstrings.
-Password hashing uses Argon2 via argon2-cffi.
 """
 from datetime import datetime
 from enum import Enum
+from typing import Any, Dict
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
-
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 
-from app import db, login
+from app import db
 
-# Global Argon2 hasher instance
+# Global Argon2 password hasher instance
 _ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4)
 
 
 class UserRole(Enum):
-    """User role enumeration for access control."""
+    """User role enumeration."""
     ADMIN = 'admin'
     GM = 'gm'
     SUPERVISOR = 'supervisor'
 
 
 class EmployeeGroup(Enum):
-    """Employee group enumeration for wage calculation."""
+    """Employee group enumeration."""
     PRODUCTION = 'production'
     WRAPPING = 'wrapping'
 
 
 class User(UserMixin, db.Model):
     """
-    Application user with role-based access control.
+    User account model for authentication and authorization.
 
     Attributes:
         id: Primary key.
-        username: Unique login identifier.
-        password_hash: Argon2-hashed password.
+        username: Unique username for login.
+        password_hash: Argon2 hashed password.
         role: User role (admin, gm, supervisor).
-        must_change_password: Flag for forced password change on first login.
+        must_change_password: Flag for forced password change.
         last_login: Timestamp of last successful login.
         created_at: Account creation timestamp.
     """
@@ -51,14 +50,10 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(
-        db.Enum(UserRole.ADMIN.value, UserRole.GM.value, UserRole.SUPERVISOR.value,
-                name='user_role_enum'),
-        nullable=False
-    )
-    must_change_password = db.Column(db.Boolean, default=True, nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='supervisor')
+    must_change_password = db.Column(db.Boolean, nullable=False, default=True)
     last_login = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships
     created_production = db.relationship(
@@ -75,15 +70,14 @@ class User(UserMixin, db.Model):
     )
 
     __table_args__ = (
-        db.CheckConstraint('username IS NOT NULL'),
-        db.CheckConstraint('password_hash IS NOT NULL'),
+        db.CheckConstraint("role IN ('admin', 'gm', 'supervisor')", name='check_valid_role'),
     )
 
     def __repr__(self) -> str:
-        return f'<User {self.username} ({self.role})>'
+        return f'<User {self.username}>'
 
-    def to_dict(self) -> dict:
-        """Return model as plain dict."""
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dictionary."""
         return {
             'id': self.id,
             'username': self.username,
@@ -111,58 +105,49 @@ class User(UserMixin, db.Model):
 
 class Employee(db.Model):
     """
-    Factory worker with production/wrapping group assignment.
+    Employee model representing factory workers.
 
     Attributes:
         id: Primary key.
-        name: Full name of the employee.
-        group: Worker group (production or wrapping).
-        active: Soft delete flag. False employees are preserved in history.
-        created_at: Record creation timestamp.
+        name: Employee full name.
+        worker_group: Worker group (production or wrapping).
+        active: Soft delete flag.
+        created_at: Employee creation timestamp.
     """
 
     __tablename__ = 'employee'
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
-    group = db.Column(
-        db.Enum(EmployeeGroup.PRODUCTION.value, EmployeeGroup.WRAPPING.value,
-                name='employee_group_enum'),
-        nullable=False
-    )
-    active = db.Column(db.Boolean, default=True, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    worker_group = db.Column(db.String(20), nullable=False, default='production')
+    active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships
     production_records = db.relationship(
         'ProductionRecord',
         back_populates='employee',
-        lazy='dynamic',
-        cascade='all, delete-orphan'
+        lazy='dynamic'
     )
     payments = db.relationship(
         'Payment',
         back_populates='employee',
-        lazy='dynamic',
-        cascade='all, delete-orphan'
+        lazy='dynamic'
     )
 
     __table_args__ = (
-        db.CheckConstraint('name IS NOT NULL'),
-        db.CheckConstraint('group IS NOT NULL'),
-        db.Index('idx_employee_active', 'active'),
+        db.CheckConstraint("worker_group IN ('production', 'wrapping')", name='check_valid_group'),
     )
 
     def __repr__(self) -> str:
-        status = 'active' if self.active else 'inactive'
-        return f'<Employee {self.name} ({self.group}, {status})>'
+        return f'<Employee {self.name}>'
 
-    def to_dict(self) -> dict:
-        """Return model as plain dict."""
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dictionary."""
         return {
             'id': self.id,
             'name': self.name,
-            'group': self.group,
+            'group': self.worker_group,
             'active': self.active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
@@ -170,18 +155,15 @@ class Employee(db.Model):
 
 class ProductionRecord(db.Model):
     """
-    Daily production record with immutable wage calculation.
-
-    The daily_wage is calculated once at insertion time and never updated,
-    preserving payroll accuracy across rate changes.
+    Daily production record for an employee.
 
     Attributes:
         id: Primary key.
         employee_id: Foreign key to employee.
         date: Production date.
         cartons: Number of cartons produced.
-        daily_wage: Calculated wage at time of record creation.
-        created_by: Foreign key to user who created the record.
+        daily_wage: Calculated wage at time of record creation (immutable).
+        created_by: User who created/updated this record.
         timestamp: Record creation timestamp.
     """
 
@@ -202,23 +184,23 @@ class ProductionRecord(db.Model):
         db.ForeignKey('user.id', ondelete='SET NULL'),
         nullable=True
     )
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships
     employee = db.relationship('Employee', back_populates='production_records')
     creator = db.relationship('User', foreign_keys=[created_by], back_populates='created_production')
 
     __table_args__ = (
-        db.CheckConstraint('cartons >= 0'),
+        db.CheckConstraint('cartons >= 0', name='check_cartons_non_negative'),
         db.UniqueConstraint('employee_id', 'date', name='uq_employee_date'),
-        db.Index('idx_production_employee_date', 'employee_id', 'date'),
+        db.Index('idx_employee_date', 'employee_id', 'date'),
     )
 
     def __repr__(self) -> str:
-        return f'<ProductionRecord {self.employee_id} on {self.date}: {self.cartons} cartons>'
+        return f'<ProductionRecord {self.employee_id} on {self.date}>'
 
-    def to_dict(self) -> dict:
-        """Return model as plain dict."""
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dictionary."""
         return {
             'id': self.id,
             'employee_id': self.employee_id,
@@ -232,18 +214,15 @@ class ProductionRecord(db.Model):
 
 class Payment(db.Model):
     """
-    Payment record for payroll tracking.
-
-    Payments are not linked to specific production records, only to
-    an employee and a payment date.
+    Payment record for an employee.
 
     Attributes:
         id: Primary key.
         employee_id: Foreign key to employee.
-        amount: Payment amount in Naira.
+        amount: Payment amount.
         payment_date: Date payment was made.
         notes: Optional notes about the payment.
-        recorded_by: Foreign key to user who recorded the payment.
+        recorded_by: User who recorded this payment.
         timestamp: Record creation timestamp.
     """
 
@@ -264,22 +243,22 @@ class Payment(db.Model):
         db.ForeignKey('user.id', ondelete='SET NULL'),
         nullable=True
     )
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships
     employee = db.relationship('Employee', back_populates='payments')
     recorder = db.relationship('User', foreign_keys=[recorded_by], back_populates='recorded_payments')
 
     __table_args__ = (
-        db.CheckConstraint('amount > 0'),
-        db.Index('idx_payment_employee_date', 'employee_id', 'payment_date'),
+        db.CheckConstraint('amount > 0', name='check_amount_positive'),
+        db.Index('idx_employee_payment_date', 'employee_id', 'payment_date'),
     )
 
     def __repr__(self) -> str:
-        return f'<Payment ₦{self.amount} to employee {self.employee_id} on {self.payment_date}>'
+        return f'<Payment {self.amount} to employee {self.employee_id}>'
 
-    def to_dict(self) -> dict:
-        """Return model as plain dict."""
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dictionary."""
         return {
             'id': self.id,
             'employee_id': self.employee_id,
@@ -292,7 +271,9 @@ class Payment(db.Model):
 
 
 # Flask-Login user loader
+from app import login
+
 @login.user_loader
-def load_user(user_id: int) -> User | None:
-    """Load user by ID for Flask-Login session management."""
+def load_user(user_id: int) -> User:
+    """Load user by ID for Flask-Login."""
     return User.query.get(int(user_id))

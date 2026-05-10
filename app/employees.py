@@ -1,16 +1,15 @@
 """
 Hilltop Tea — Employee Management Blueprint.
 
-Handles CRUD operations for employee records.
-Admin-only access.
+CRUD operations for employee records. Admin only.
 """
 from flask import Blueprint, flash, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app import db
 from app.forms import EmployeeForm
 from app.models import Employee, Payment, ProductionRecord
-from app.utils import paginate, require_role
+from app.utils import flash_error, flash_success, paginate, require_role
 
 employees_bp = Blueprint('employees', __name__)
 
@@ -18,59 +17,53 @@ employees_bp = Blueprint('employees', __name__)
 @employees_bp.route('/')
 @login_required
 @require_role('admin')
-def list_employees():
+def index():
     """
-    Display paginated list of active employees.
+    List all active employees with pagination.
 
-    Admin only.
+    GET: Render paginated list of active employees.
     """
     page = request.args.get('page', 1, type=int)
     query = Employee.query.filter_by(active=True).order_by(Employee.name)
     pagination = paginate(query, page)
-    return render_template('employee_list.html',
-                          employees=pagination.items,
-                          pagination=pagination,
-                          active_only=True)
+    return render_template('employee_list.html', pagination=pagination, active_only=True)
 
 
 @employees_bp.route('/inactive')
 @login_required
 @require_role('admin')
-def list_inactive():
+def inactive():
     """
-    Display paginated list of inactive employees.
+    List all inactive employees.
 
-    Admin only.
+    GET: Render list of inactive employees with reactivate option.
     """
     page = request.args.get('page', 1, type=int)
     query = Employee.query.filter_by(active=False).order_by(Employee.name)
     pagination = paginate(query, page)
-    return render_template('employee_list.html',
-                          employees=pagination.items,
-                          pagination=pagination,
-                          active_only=False)
+    return render_template('employee_list.html', pagination=pagination, active_only=False)
 
 
 @employees_bp.route('/add', methods=['GET', 'POST'])
 @login_required
 @require_role('admin')
-def add_employee():
+def add():
     """
     Add a new employee.
 
-    GET: Render form.
-    POST: Create employee and redirect to list.
+    GET: Render employee creation form.
+    POST: Create new employee and redirect to list.
     """
     form = EmployeeForm()
     if form.validate_on_submit():
         employee = Employee(
             name=form.name.data,
-            group=form.group.data
+            worker_group=form.group.data
         )
         db.session.add(employee)
         db.session.commit()
-        flash(f'Employee {employee.name} added successfully.', 'success')
-        return redirect(url_for('employees.list_employees'))
+        flash_success(f'Employee {employee.name} added successfully.')
+        return redirect(url_for('employees.index'))
 
     return render_template('employee_form.html', form=form, title='Add Employee')
 
@@ -78,11 +71,11 @@ def add_employee():
 @employees_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 @require_role('admin')
-def edit_employee(id):
+def edit(id):
     """
     Edit an existing employee.
 
-    GET: Render form with existing data.
+    GET: Render employee edit form.
     POST: Update employee and redirect to list.
     """
     employee = Employee.query.get_or_404(id)
@@ -90,55 +83,54 @@ def edit_employee(id):
 
     if form.validate_on_submit():
         employee.name = form.name.data
-        employee.group = form.group.data
+        employee.worker_group = form.group.data
         db.session.commit()
-        flash(f'Employee {employee.name} updated successfully.', 'success')
-        return redirect(url_for('employees.list_employees'))
+        flash_success(f'Employee {employee.name} updated successfully.')
+        return redirect(url_for('employees.index'))
 
-    return render_template('employee_form.html',
-                          form=form,
-                          title='Edit Employee',
-                          employee=employee)
+    return render_template('employee_form.html', form=form, title='Edit Employee', employee=employee)
 
 
 @employees_bp.route('/<int:id>/deactivate', methods=['POST'])
 @login_required
 @require_role('admin')
-def deactivate_employee(id):
+def deactivate(id):
     """
-    Soft delete an employee by setting active=False.
+    Soft delete an employee (set active=False).
 
-    Historical records are preserved.
+    POST: Deactivate employee and redirect to list.
     """
     employee = Employee.query.get_or_404(id)
     employee.active = False
     db.session.commit()
-    flash(f'Employee {employee.name} deactivated. Historical records are preserved.', 'info')
-    return redirect(url_for('employees.list_employees'))
+    flash_success(f'Employee {employee.name} deactivated. Historical records are preserved.')
+    return redirect(url_for('employees.index'))
 
 
 @employees_bp.route('/<int:id>/reactivate', methods=['POST'])
 @login_required
 @require_role('admin')
-def reactivate_employee(id):
+def reactivate(id):
     """
-    Reactivate an inactive employee by setting active=True.
+    Reactivate a deactivated employee.
+
+    POST: Set active=True and redirect to inactive list.
     """
     employee = Employee.query.get_or_404(id)
     employee.active = True
     db.session.commit()
-    flash(f'Employee {employee.name} reactivated successfully.', 'success')
-    return redirect(url_for('employees.list_inactive'))
+    flash_success(f'Employee {employee.name} reactivated successfully.')
+    return redirect(url_for('employees.inactive'))
 
 
 @employees_bp.route('/<int:id>/hard-delete', methods=['POST'])
 @login_required
 @require_role('admin')
-def hard_delete_employee(id):
+def hard_delete(id):
     """
-    Permanently delete an employee and all associated records.
+    Permanently delete an employee.
 
-    Blocked if any production records or payments exist.
+    POST: Delete employee if no records exist, otherwise show error.
     """
     employee = Employee.query.get_or_404(id)
 
@@ -147,15 +139,13 @@ def hard_delete_employee(id):
     has_payments = Payment.query.filter_by(employee_id=id).first() is not None
 
     if has_production or has_payments:
-        flash(
+        flash_error(
             f'Cannot delete {employee.name}. '
-            'Employee has associated production records or payments. '
-            'Deactivate instead to preserve history.',
-            'danger'
+            'Employee has historical records. Use deactivate instead.'
         )
-        return redirect(url_for('employees.list_employees'))
+        return redirect(url_for('employees.index'))
 
     db.session.delete(employee)
     db.session.commit()
-    flash(f'Employee {employee.name} permanently deleted.', 'success')
-    return redirect(url_for('employees.list_employees'))
+    flash_success(f'Employee {employee.name} permanently deleted.')
+    return redirect(url_for('employees.index'))

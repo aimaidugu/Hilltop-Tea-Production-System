@@ -1,15 +1,16 @@
 """
-Hilltop Tea — Main Dashboard Blueprint.
+Hilltop Tea — Main Blueprint.
 
-Provides the main dashboard view with analytics and summary statistics.
+Dashboard and analytics views.
 """
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, jsonify, render_template
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app import db
 from app.models import Employee, Payment, ProductionRecord
+from app.utils import month_range
 
 main_bp = Blueprint('main', __name__)
 
@@ -18,171 +19,138 @@ main_bp = Blueprint('main', __name__)
 @login_required
 def index():
     """
-    Main dashboard with production and payroll analytics.
+    Main dashboard view.
 
     Displays:
     - Today's production summary
     - Current month payroll overview
-    - Charts for daily cartons, monthly trends, and wage split
-    - Recent payment activity
+    - Charts for analytics
+    - Recent activity
     """
-    today = datetime.utcnow().date()
-    first_of_month = today.replace(day=1)
+    today = date.today()
+    current_month = today.strftime('%Y-%m')
 
     # Today's production
     today_records = ProductionRecord.query.filter_by(date=today).all()
     today_cartons = sum(r.cartons for r in today_records)
-    today_employees = len(today_records)
+    today_employees = len(set(r.employee_id for r in today_records))
 
     # Current month payroll
-    month_records = ProductionRecord.query.filter(
-        ProductionRecord.date >= first_of_month,
-        ProductionRecord.date <= today
-    ).all()
-    month_wages = sum(r.daily_wage for r in month_records)
+    first_day, last_day = month_range(current_month)
+    month_wages = db.session.query(
+        db.func.sum(ProductionRecord.daily_wage)
+    ).filter(
+        ProductionRecord.date >= first_day,
+        ProductionRecord.date <= last_day
+    ).scalar() or 0
 
-    month_payments = Payment.query.filter(
-        Payment.payment_date >= first_of_month,
-        Payment.payment_date <= today
-    ).all()
-    month_paid = sum(p.amount for p in month_payments)
+    month_paid = db.session.query(
+        db.func.sum(Payment.amount)
+    ).filter(
+        Payment.payment_date >= first_day,
+        Payment.payment_date <= last_day
+    ).scalar() or 0
 
     month_balance = month_wages - month_paid
 
-    # Last 14 days daily cartons
-    fourteen_days_ago = today - timedelta(days=14)
+    # Last 14 days daily cartons (for bar chart)
+    fourteen_days_ago = today - timedelta(days=13)
     daily_cartons = db.session.query(
         ProductionRecord.date,
-        db.func.sum(ProductionRecord.cartons).label('total')
+        db.func.sum(ProductionRecord.cartons)
     ).filter(
-        ProductionRecord.date >= fourteen_days_ago
+        ProductionRecord.date >= fourteen_days_ago,
+        ProductionRecord.date <= today
     ).group_by(ProductionRecord.date).order_by(ProductionRecord.date).all()
 
-    daily_chart_labels = [d[0].strftime('%b %d') for d in daily_cartons]
-    daily_chart_data = [int(d[1]) if d[1] else 0 for d in daily_cartons]
+    daily_chart_labels = [d.strftime('%b %d') for d, _ in daily_cartons]
+    daily_chart_data = [float(c) for _, c in daily_cartons]
 
-    # Last 6 months wage totals
+    # Last 6 months wage totals (for line chart)
     monthly_wages = []
     monthly_labels = []
-    for i in range(6):
-        month_start = (first_of_month - timedelta(days=32 * i)).replace(day=1)
-        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        total = db.session.query(db.func.sum(ProductionRecord.daily_wage)).filter(
-            ProductionRecord.date >= month_start,
-            ProductionRecord.date <= month_end
-        ).scalar() or 0
-        monthly_wages.insert(0, float(total))
-        monthly_labels.insert(0, month_start.strftime('%b %Y'))
+    for i in range(5, -1, -1):
+        month_date = (today.replace(day=1) - timedelta(days=32*i)).replace(day=1)
+        month_str = month_date.strftime('%Y-%m')
+        fd, ld = month_range(month_str)
 
-    # Current month wage split by group
-    production_wage = db.session.query(db.func.sum(ProductionRecord.daily_wage)).join(
-        Employee, Employee.id == ProductionRecord.employee_id
-    ).filter(
-        Employee.group == 'production',
-        ProductionRecord.date >= first_of_month,
-        ProductionRecord.date <= today
+        total = db.session.query(
+            db.func.sum(ProductionRecord.daily_wage)
+        ).filter(
+            ProductionRecord.date >= fd,
+            ProductionRecord.date <= ld
+        ).scalar() or 0
+
+        monthly_wages.append(float(total))
+        monthly_labels.append(month_date.strftime('%b %Y'))
+
+    # Current month wage split by group (for donut chart)
+    production_wages = db.session.query(
+        db.func.sum(ProductionRecord.daily_wage)
+    ).join(Employee).filter(
+        Employee.worker_group == 'production',
+        ProductionRecord.date >= first_day,
+        ProductionRecord.date <= last_day
     ).scalar() or 0
 
-    wrapping_wage = db.session.query(db.func.sum(ProductionRecord.daily_wage)).join(
-        Employee, Employee.id == ProductionRecord.employee_id
-    ).filter(
-        Employee.group == 'wrapping',
-        ProductionRecord.date >= first_of_month,
-        ProductionRecord.date <= today
+    wrapping_wages = db.session.query(
+        db.func.sum(ProductionRecord.daily_wage)
+    ).join(Employee).filter(
+        Employee.worker_group == 'wrapping',
+        ProductionRecord.date >= first_day,
+        ProductionRecord.date <= last_day
     ).scalar() or 0
 
     wage_split_labels = ['Production', 'Wrapping']
-    wage_split_data = [float(production_wage), float(wrapping_wage)]
+    wage_split_data = [float(production_wages), float(wrapping_wages)]
 
-    # Recent payments (last 5)
+    # Recent payments
     recent_payments = Payment.query.order_by(
         Payment.timestamp.desc()
     ).limit(5).all()
 
-    return render_template('index.html',
-                          today_cartons=today_cartons,
-                          today_employees=today_employees,
-                          month_wages=month_wages,
-                          month_paid=month_paid,
-                          month_balance=month_balance,
-                          daily_chart_labels=daily_chart_labels,
-                          daily_chart_data=daily_chart_data,
-                          monthly_labels=monthly_labels,
-                          monthly_wages=monthly_wages,
-                          wage_split_labels=wage_split_labels,
-                          wage_split_data=wage_split_data,
-                          recent_payments=recent_payments)
+    return render_template(
+        'index.html',
+        today=today,
+        current_month=current_month,
+        today_cartons=today_cartons,
+        today_employees=today_employees,
+        month_wages=month_wages,
+        month_paid=month_paid,
+        month_balance=month_balance,
+        daily_chart_labels=daily_chart_labels,
+        daily_chart_data=daily_chart_data,
+        monthly_labels=monthly_labels,
+        monthly_wages=monthly_wages,
+        wage_split_labels=wage_split_labels,
+        wage_split_data=wage_split_data,
+        recent_payments=recent_payments,
+    )
 
 
-@main_bp.route('/api/daily-cartons')
+@main_bp.route('/api/chart-data')
 @login_required
-def api_daily_cartons():
-    """API endpoint for daily carton chart data."""
-    today = datetime.utcnow().date()
-    fourteen_days_ago = today - timedelta(days=14)
+def chart_data():
+    """
+    API endpoint for chart data.
 
+    Returns JSON data for dashboard charts.
+    """
+    today = date.today()
+
+    # Last 14 days daily cartons
+    fourteen_days_ago = today - timedelta(days=13)
     daily_cartons = db.session.query(
         ProductionRecord.date,
-        db.func.sum(ProductionRecord.cartons).label('total')
+        db.func.sum(ProductionRecord.cartons)
     ).filter(
-        ProductionRecord.date >= fourteen_days_ago
+        ProductionRecord.date >= fourteen_days_ago,
+        ProductionRecord.date <= today
     ).group_by(ProductionRecord.date).order_by(ProductionRecord.date).all()
 
     return jsonify({
-        'labels': [d[0].strftime('%b %d') for d in daily_cartons],
-        'data': [int(d[1]) if d[1] else 0 for d in daily_cartons]
-    })
-
-
-@main_bp.route('/api/monthly-wages')
-@login_required
-def api_monthly_wages():
-    """API endpoint for monthly wage trend chart data."""
-    today = datetime.utcnow().date()
-    first_of_month = today.replace(day=1)
-
-    monthly_wages = []
-    monthly_labels = []
-    for i in range(6):
-        month_start = (first_of_month - timedelta(days=32 * i)).replace(day=1)
-        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        total = db.session.query(db.func.sum(ProductionRecord.daily_wage)).filter(
-            ProductionRecord.date >= month_start,
-            ProductionRecord.date <= month_end
-        ).scalar() or 0
-        monthly_wages.insert(0, float(total))
-        monthly_labels.insert(0, month_start.strftime('%b %Y'))
-
-    return jsonify({
-        'labels': monthly_labels,
-        'data': monthly_wages
-    })
-
-
-@main_bp.route('/api/wage-split')
-@login_required
-def api_wage_split():
-    """API endpoint for wage split by group chart data."""
-    today = datetime.utcnow().date()
-    first_of_month = today.replace(day=1)
-
-    production_wage = db.session.query(db.func.sum(ProductionRecord.daily_wage)).join(
-        Employee, Employee.id == ProductionRecord.employee_id
-    ).filter(
-        Employee.group == 'production',
-        ProductionRecord.date >= first_of_month,
-        ProductionRecord.date <= today
-    ).scalar() or 0
-
-    wrapping_wage = db.session.query(db.func.sum(ProductionRecord.daily_wage)).join(
-        Employee, Employee.id == ProductionRecord.employee_id
-    ).filter(
-        Employee.group == 'wrapping',
-        ProductionRecord.date >= first_of_month,
-        ProductionRecord.date <= today
-    ).scalar() or 0
-
-    return jsonify({
-        'labels': ['Production', 'Wrapping'],
-        'data': [float(production_wage), float(wrapping_wage)]
+        'daily_cartons': [
+            {'date': d.strftime('%Y-%m-%d'), 'cartons': int(c)}
+            for d, c in daily_cartons
+        ]
     })

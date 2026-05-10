@@ -28,41 +28,41 @@ def _resolve_db_url() -> str:
 
 class Config:
     """Base configuration. All values overridable via environment variables."""
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-insecure-key-change-me')
+    SECRET_KEY                    = os.environ.get('SECRET_KEY', 'dev-insecure-key-change-me')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    WTF_CSRF_ENABLED = True
-    RECORDS_PER_PAGE = 25
-    MAX_CONTENT_LENGTH = 2 * 1024 * 1024  # 2 MB upload limit
+    WTF_CSRF_ENABLED               = True
+    RECORDS_PER_PAGE               = 25
+    MAX_CONTENT_LENGTH             = 2 * 1024 * 1024  # 2 MB upload limit
 
 
 class DevelopmentConfig(Config):
     """Local development. SQLite, debug mode on."""
-    DEBUG = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///hilltop_dev.db'
+    DEBUG                    = True
+    SQLALCHEMY_DATABASE_URI  = 'sqlite:///hilltop_dev.db'
 
 
 class TestingConfig(Config):
     """pytest test suite. In-memory SQLite, CSRF off, fast Argon2."""
-    TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
-    WTF_CSRF_ENABLED = False
-    SECRET_KEY = 'test-secret-not-used-in-production'
-    SERVER_NAME = 'localhost'
+    TESTING                  = True
+    SQLALCHEMY_DATABASE_URI  = 'sqlite:///:memory:'
+    WTF_CSRF_ENABLED         = False
+    SECRET_KEY               = 'test-secret-not-used-in-production'
+    SERVER_NAME              = 'localhost'
 
 
 class ProductionConfig(Config):
     """Production. PostgreSQL required via DATABASE_URL."""
-    DEBUG = False
-    SQLALCHEMY_DATABASE_URI = _resolve_db_url()
-    SESSION_COOKIE_SECURE = True
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
+    DEBUG                    = False
+    SQLALCHEMY_DATABASE_URI  = _resolve_db_url()
+    SESSION_COOKIE_SECURE    = True
+    SESSION_COOKIE_HTTPONLY  = True
+    SESSION_COOKIE_SAMESITE  = 'Lax'
     PERMANENT_SESSION_LIFETIME = timedelta(hours=1)
 
 
 config = {
-    'development': DevelopmentConfig,
-    'testing': TestingConfig,
-    'production': ProductionConfig,
-    'default': DevelopmentConfig,
+    'development' : DevelopmentConfig,
+    'testing'     : TestingConfig,
+    'production'  : ProductionConfig,
+    'default'     : DevelopmentConfig,
 }

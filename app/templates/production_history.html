@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Production History - Hilltop Tea{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-display font-bold text-tea-green">Production History</h1>
+    <a href="{{ url_for('production.index') }}" class="btn btn-green-outline">Back to Entry</a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-6">
+    <form method="GET" class="flex flex-wrap gap-4 items-end">
+        <div class="flex-1 min-w-[200px]">
+            <label for="date_filter" class="form-label">Date</label>
+            <input type="date" id="date_filter" name="date"
+                   class="form-control"
+                   value="{{ date_filter or '' }}">
+        </div>
+
+        <div class="flex-1 min-w-[200px]">
+            <label for="employee_filter" class="form-label">Employee</label>
+            <select id="employee_filter" name="employee" class="form-control form-select">
+                <option value="">All Employees</option>
+                {% for emp in all_employees %}
+                    <option value="{{ emp.id }}"
+                            {{ 'selected' if employee_filter == str(emp.id) else '' }}>
+                        {{ emp.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-gold">Filter</button>
+        <a href="{{ url_for('production.history') }}" class="btn btn-green-outline">Clear</a>
+    </form>
+</div>
+
+<div class="card">
+    {% if pagination.items %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Employee</th>
+                    <th>Group</th>
+                    <th>Cartons</th>
+                    <th class="currency">Daily Wage (₦)</th>
+                    <th>Recorded By</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in pagination.items %}
+                    <tr>
+                        <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ record.employee.name }}</td>
+                        <td>
+                            <span class="badge badge-{{ record.employee.group.value }}">
+                                {{ record.employee.group.value|title }}
+                            </span>
+                        </td>
+                        <td>{{ record.cartons }}</td>
+                        <td class="currency">₦{{ "{:,.2f}".format(record.daily_wage) }}</td>
+                        <td>
+                            {% if record.creator %}
+                                {{ record.creator.username }}
+                            {% else %}
+                                <span class="text-tea-muted">Unknown</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if pagination.pages > 1 %}
+            <div class="pagination">
+                {% if pagination.has_prev %}
+                    <a href="{{ url_for('production.history', page=pagination.prev_num, date=date_filter, employee=employee_filter) }}">
+                        &laquo; Previous
+                    </a>
+                {% else %}
+                    <span class="disabled">&laquo; Previous</span>
+                {% endif %}
+
+                {% for page_num in pagination.iter_pages() %}
+                    {% if page_num %}
+                        {% if page_num == pagination.page %}
+                            <span class="active">{{ page_num }}</span>
+                        {% else %}
+                            <a href="{{ url_for('production.history', page=page_num, date=date_filter, employee=employee_filter) }}">
+                                {{ page_num }}
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        <span>&hellip;</span>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                    <a href="{{ url_for('production.history', page=pagination.next_num, date=date_filter, employee=employee_filter) }}">
+                        Next &raquo;
+                    </a>
+                {% else %}
+                    <span class="disabled">Next &raquo;</span>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% else %}
+        <p class="text-tea-muted text-center py-8">No production records found.</p>
+    {% endif %}
+</div>
+{% endblock %}

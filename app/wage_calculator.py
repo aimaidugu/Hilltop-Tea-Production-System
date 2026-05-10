@@ -12,13 +12,13 @@ if TYPE_CHECKING:
 
 # ── Module-level constants — never use raw numbers in logic ────────────────
 PRODUCTION_TIERS: list[tuple[int, float, int]] = [
-    (0, 349, 250),
-    (350, 399, 270),
-    (400, 499, 300),
+    (0,   349,         250),
+    (350, 399,         270),
+    (400, 499,         300),
     (500, float('inf'), 320),
 ]
 WRAPPING_RATE: int = 100
-MIN_CARTONS: int = 0
+MIN_CARTONS:   int = 0
 
 
 class WageCalculator:
@@ -34,7 +34,7 @@ class WageCalculator:
     """
 
     def __init__(self) -> None:
-        self._tiers: list[tuple[int, float, int]] = list(PRODUCTION_TIERS)
+        self._tiers: list[tuple[int, float, int]] = list(PRODUCTION_TIERS)  # defensive copy
         self._wrapping_rate: int = WRAPPING_RATE
 
     def calculate_daily(self, employee: "Employee", cartons: int) -> float:
@@ -42,7 +42,7 @@ class WageCalculator:
         Compute the daily wage for one employee.
 
         Args:
-            employee: Employee model instance. Must have a `group` attribute
+            employee: Employee model instance. Must have a `worker_group` attribute
                       of value 'production' or 'wrapping'.
             cartons:  Number of cartons. Must be >= 0.
 
@@ -51,17 +51,17 @@ class WageCalculator:
 
         Raises:
             ValueError: If cartons < 0.
-            ValueError: If employee.group is unrecognised.
+            ValueError: If employee.worker_group is unrecognised.
         """
         if cartons < MIN_CARTONS:
             raise ValueError(
                 f"Cartons must be >= {MIN_CARTONS}. Received: {cartons}"
             )
-        if employee.group == 'production':
+        if employee.worker_group == 'production':
             return self._production_wage(cartons)
-        if employee.group == 'wrapping':
+        if employee.worker_group == 'wrapping':
             return float(cartons * self._wrapping_rate)
-        raise ValueError(f"Unknown employee group: '{employee.group}'")
+        raise ValueError(f"Unknown employee group: '{employee.worker_group}'")
 
     def _production_wage(self, cartons: int) -> float:
         """
@@ -76,6 +76,7 @@ class WageCalculator:
         for low, high, rate in self._tiers:
             if low <= cartons <= high:
                 return float(cartons * rate)
+        # Reaching here means tier table is misconfigured — fail loudly
         raise ValueError(
             f"No matching wage tier for {cartons} cartons. "
             f"Check PRODUCTION_TIERS in wage_calculator.py."

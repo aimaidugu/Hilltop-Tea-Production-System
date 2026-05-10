@@ -1,10 +1,9 @@
 """
-Hilltop Tea — Payroll Management Blueprint.
+Hilltop Tea — Payroll Blueprint.
 
-Handles monthly payroll view and payment recording.
-All authenticated users can access.
+Monthly payroll view and payment recording.
 """
-from datetime import datetime
+from datetime import date, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -12,20 +11,43 @@ from flask_login import current_user, login_required
 from app import db
 from app.forms import PaymentForm
 from app.models import Employee, Payment, ProductionRecord
-from app.utils import get_adjacent_months, get_previous_month, month_range, paginate
+from app.utils import flash_error, flash_success, get_adjacent_months, month_range, paginate
 
 payroll_bp = Blueprint('payroll', __name__)
 
 
 @payroll_bp.route('/')
 @login_required
-def payroll_view():
+def index():
     """
-    Display monthly payroll summary with wage, paid, and balance per employee.
+    Monthly payroll view.
 
-    Query parameter ?month=YYYY-MM selects the month (default: previous month).
-    Query parameter ?group=production|wrapping filters by employee group.
+    GET: Render payroll table with month picker and filters.
     """
+    # Get month from query string, default to previous month
+    month_str = request.args.get('month')
+    if month_str:
+        try:
+            first_day, last_day = month_range(month_str)
+        except ValueError:
+            # Invalid format, default to previous month
+            today = date.today()
+            if today.month == 1:
+                first_day = date(today.year - 1, 12, 1)
+            else:
+                first_day = date(today.year, today.month - 1, 1)
+            last_day = (first_day.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+            month_str = first_day.strftime('%Y-%m')
+            flash_error('Invalid month format. Using previous month.')
+    else:
+        today = date.today()
+        if today.month == 1:
+            first_day = date(today.year - 1, 12, 1)
+        else:
+            first_day = date(today.year, today.month - 1, 1)
+        last_day = (first_day.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        month_str = first_day.strftime('%Y-%m')
+
     # ═══════════════════════════════════════════════════════════════
     # PPP: payroll_view
     # ═══════════════════════════════════════════════════════════════
@@ -61,25 +83,16 @@ def payroll_view():
     #   - Grand totals row reflects filtered results
     # ═══════════════════════════════════════════════════════════════
 
-    month_str = request.args.get('month', get_previous_month())
-    group_filter = request.args.get('group')
-
-    try:
-        first_day, last_day = month_range(month_str)
-    except ValueError:
-        flash(f'Invalid month format: {month_str}. Using previous month.', 'warning')
-        month_str = get_previous_month()
-        first_day, last_day = month_range(month_str)
-
     # Single query with LEFT JOINs and GROUP BY for performance
+    from sqlalchemy import func, case
+
     query = db.session.query(
         Employee.id,
         Employee.name,
-        Employee.group,
-        Employee.active,
-        db.func.coalesce(db.func.sum(ProductionRecord.cartons), 0).label('carton_total'),
-        db.func.coalesce(db.func.sum(ProductionRecord.daily_wage), 0).label('wage_total'),
-        db.func.coalesce(db.func.sum(Payment.amount), 0).label('paid_total')
+        Employee.worker_group,
+        func.coalesce(func.sum(ProductionRecord.cartons), 0).label('carton_total'),
+        func.coalesce(func.sum(ProductionRecord.daily_wage), 0).label('wage_total'),
+        func.coalesce(func.sum(Payment.amount), 0).label('paid_total'),
     ).outerjoin(
         ProductionRecord,
         (ProductionRecord.employee_id == Employee.id) &
@@ -93,46 +106,50 @@ def payroll_view():
     ).group_by(Employee.id).order_by(Employee.name)
 
     # Apply group filter
+    group_filter = request.args.get('group')
     if group_filter and group_filter in ('production', 'wrapping'):
-        query = query.filter(Employee.group == group_filter)
+        query = query.filter(Employee.worker_group == group_filter)
 
     results = query.all()
 
     # Build result list with calculated balance
     payroll_data = []
-    grand_totals = {'cartons': 0, 'wage': 0, 'paid': 0, 'balance': 0}
+    grand_wage = 0
+    grand_paid = 0
+    grand_cartons = 0
 
-    for row in results:
-        wage_total = float(row.wage_total)
-        paid_total = float(row.paid_total)
+    for emp_id, emp_name, emp_group, carton_total, wage_total, paid_total in results:
         balance = wage_total - paid_total
-
         payroll_data.append({
-            'id': row.id,
-            'name': row.name,
-            'group': row.group,
-            'active': row.active,
-            'cartons': int(row.carton_total),
-            'wage': wage_total,
-            'paid': paid_total,
-            'balance': balance
+            'id': emp_id,
+            'name': emp_name,
+            'group': emp_group.value if emp_group else 'unknown',
+            'cartons': int(carton_total),
+            'wage': float(wage_total),
+            'paid': float(paid_total),
+            'balance': balance,
         })
+        grand_wage += wage_total
+        grand_paid += paid_total
+        grand_cartons += carton_total
 
-        grand_totals['cartons'] += int(row.carton_total)
-        grand_totals['wage'] += wage_total
-        grand_totals['paid'] += paid_total
-        grand_totals['balance'] += balance
+    grand_balance = grand_wage - grand_paid
 
     # Get adjacent months for navigation
     prev_month, next_month = get_adjacent_months(month_str)
 
-    return render_template('payroll.html',
-                          payroll_data=payroll_data,
-                          grand_totals=grand_totals,
-                          month_str=month_str,
-                          prev_month=prev_month,
-                          next_month=next_month,
-                          group_filter=group_filter)
+    return render_template(
+        'payroll.html',
+        month_str=month_str,
+        payroll_data=payroll_data,
+        grand_cartons=grand_cartons,
+        grand_wage=grand_wage,
+        grand_paid=grand_paid,
+        grand_balance=grand_balance,
+        prev_month=prev_month,
+        next_month=next_month,
+        group_filter=group_filter,
+    )
 
 
 @payroll_bp.route('/<int:employee_id>/pay', methods=['GET', 'POST'])
@@ -142,15 +159,18 @@ def record_payment(employee_id):
     Record a payment for an employee.
 
     GET: Render payment form.
-    POST: Save payment and redirect to payroll with month preserved.
+    POST: Save payment and redirect to payroll view.
     """
     employee = Employee.query.get_or_404(employee_id)
-    month_str = request.args.get('month', get_previous_month())
-
     form = PaymentForm()
+
+    # Pre-fill date with today
+    if not form.payment_date.data:
+        form.payment_date.data = date.today()
+
     if form.validate_on_submit():
         payment = Payment(
-            employee_id=employee_id,
+            employee_id=employee.id,
             amount=form.amount.data,
             payment_date=form.payment_date.data,
             notes=form.notes.data,
@@ -158,10 +178,18 @@ def record_payment(employee_id):
         )
         db.session.add(payment)
         db.session.commit()
-        flash(f'Payment of ₦{form.amount.data:,.2f} recorded for {employee.name}.', 'success')
-        return redirect(url_for('payroll.payroll_view', month=month_str))
 
-    return render_template('record_payment.html',
-                          form=form,
-                          employee=employee,
-                          month_str=month_str)
+        flash_success(f'Payment of ₦{form.amount.data:,.2f} recorded for {employee.name}.')
+
+        # Redirect back to payroll with the same month
+        month_str = request.args.get('month')
+        if month_str:
+            return redirect(url_for('payroll.index', month=month_str))
+        return redirect(url_for('payroll.index'))
+
+    return render_template(
+        'record_payment.html',
+        form=form,
+        employee=employee,
+        month_str=request.args.get('month'),
+    )

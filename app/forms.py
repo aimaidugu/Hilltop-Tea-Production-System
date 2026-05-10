@@ -1,60 +1,81 @@
 """
-Hilltop Tea — WTForms for user input validation.
+Hilltop Tea — WTForms.
 
-All forms include CSRF protection and field-level validation.
+All form classes for input validation and CSRF protection.
 """
 from datetime import date
+from typing import Optional
 
 from flask_wtf import FlaskForm
 from wtforms import (
-    StringField, PasswordField, SelectField, IntegerField,
-    TextAreaField, DateField, FloatField, SubmitField
+    BooleanField,
+    DateField,
+    FloatField,
+    IntegerField,
+    PasswordField,
+    SelectField,
+    StringField,
+    SubmitField,
+    TextAreaField,
 )
 from wtforms.validators import (
-    DataRequired, Length, EqualTo, NumberRange, Optional, ValidationError
+    DataRequired,
+    Email,
+    EqualTo,
+    Length,
+    NumberRange,
+    Optional as OptionalValidator,
+    ValidationError,
 )
 
 from app.models import User
 
 
 class LoginForm(FlaskForm):
-    """Form for user authentication."""
+    """Form for user login."""
+
     username = StringField('Username', validators=[DataRequired(), Length(min=3, max=80)])
     password = PasswordField('Password', validators=[DataRequired()])
-    submit = SubmitField('Log In')
+    remember_me = BooleanField('Remember me')
+    submit = SubmitField('Sign In')
 
 
 class ChangePasswordForm(FlaskForm):
-    """Form for password change after first login or password reset."""
+    """Form for changing user password."""
+
     current_password = PasswordField('Current Password', validators=[DataRequired()])
     new_password = PasswordField(
         'New Password',
         validators=[
             DataRequired(),
-            Length(min=8, message='Password must be at least 8 characters.')
+            Length(min=8, message='Password must be at least 8 characters long'),
         ]
     )
     confirm_password = PasswordField(
         'Confirm New Password',
         validators=[
             DataRequired(),
-            EqualTo('new_password', message='Passwords must match.')
+            EqualTo('new_password', message='Passwords must match'),
         ]
     )
     submit = SubmitField('Change Password')
 
 
 class EmployeeForm(FlaskForm):
-    """Form for creating and editing employees."""
+    """Form for creating/editing employees."""
+
     name = StringField(
         'Full Name',
-        validators=[DataRequired(), Length(min=2, max=120)]
+        validators=[
+            DataRequired(),
+            Length(min=2, max=120, message='Name must be between 2 and 120 characters'),
+        ]
     )
     group = SelectField(
         'Worker Group',
         choices=[
-            ('production', 'Production (Maisa Machine Operators)'),
-            ('wrapping', 'Wrapping (Tea Capsule Team)')
+            ('production', 'Production (Maisa Machine)'),
+            ('wrapping', 'Wrapping (Tea Capsules)'),
         ],
         validators=[DataRequired()]
     )
@@ -62,83 +83,68 @@ class EmployeeForm(FlaskForm):
 
 
 class ProductionEntryForm(FlaskForm):
-    """Dynamic form for daily production entry. Fields are generated per employee."""
+    """Form for daily production entry."""
+
     submit = SubmitField('Save Production')
 
 
 class PaymentForm(FlaskForm):
     """Form for recording employee payments."""
+
     amount = FloatField(
         'Payment Amount (₦)',
         validators=[
             DataRequired(),
-            NumberRange(min=0.01, message='Amount must be greater than zero.')
+            NumberRange(min=0.01, message='Amount must be greater than 0'),
         ]
     )
-    payment_date = DateField(
-        'Payment Date',
-        validators=[DataRequired()],
-        default=date.today
-    )
-    notes = TextAreaField('Notes', validators=[Optional(), Length(max=500)])
+    payment_date = DateField('Payment Date', validators=[DataRequired()])
+    notes = TextAreaField('Notes', validators=[OptionalValidator()])
     submit = SubmitField('Record Payment')
 
 
 class UserForm(FlaskForm):
-    """Form for creating and editing users."""
+    """Form for creating/editing users."""
+
     username = StringField(
         'Username',
-        validators=[DataRequired(), Length(min=3, max=80)]
+        validators=[
+            DataRequired(),
+            Length(min=3, max=80, message='Username must be between 3 and 80 characters'),
+        ]
     )
     role = SelectField(
         'Role',
         choices=[
             ('admin', 'Administrator'),
             ('gm', 'General Manager'),
-            ('supervisor', 'Supervisor')
+            ('supervisor', 'Supervisor'),
         ],
         validators=[DataRequired()]
     )
     password = PasswordField(
         'Password',
         validators=[
-            Optional(),
-            Length(min=8, message='Password must be at least 8 characters.')
+            OptionalValidator(),
+            Length(min=8, message='Password must be at least 8 characters long'),
         ]
     )
-    confirm_password = PasswordField(
-        'Confirm Password',
-        validators=[
-            Optional(),
-            EqualTo('password', message='Passwords must match.')
-        ]
-    )
+    confirm_password = PasswordField('Confirm Password')
+    must_change_password = BooleanField('Require password change on next login', default=True)
     submit = SubmitField('Save User')
 
-    def __init__(self, *args, is_edit: bool = False, **kwargs):
+    def __init__(self, *args, original_username: Optional[str] = None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.is_edit = is_edit
-        if is_edit:
-            self.password.validators = [Optional()]
-            self.confirm_password.validators = [Optional()]
-        else:
-            self.password.validators = [
-                DataRequired(),
-                Length(min=8, message='Password must be at least 8 characters.')
-            ]
-            self.confirm_password.validators = [
-                DataRequired(),
-                EqualTo('password', message='Passwords must match.')
-            ]
+        self.original_username = original_username
 
     def validate_username(self, field):
-        """Ensure username is unique (except when editing same user)."""
-        if self.is_edit:
-            user = User.query.filter(
-                User.username == field.data,
-                User.id != self.id
-            ).first()
-        else:
-            user = User.query.filter_by(username=field.data).first()
-        if user is not None:
-            raise ValidationError('Username already exists.')
+        """Validate username uniqueness."""
+        if field.data != self.original_username:
+            existing = User.query.filter_by(username=field.data).first()
+            if existing:
+                raise ValidationError('Username already exists. Please choose a different one.')
+
+    def validate_confirm_password(self, field):
+        """Validate password confirmation."""
+        if self.password.data and field.data != self.password.data:
+            raise ValidationError('Passwords must match.')

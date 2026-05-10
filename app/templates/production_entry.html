@@ -1,27 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Daily Production — Hilltop Tea{% endblock %}
+{% block title %}Production Entry - Hilltop Tea{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">Daily Production Entry</h1>
-    {% if current_user.role == 'admin' %}
-    <div class="d-flex gap-2 align-items-center">
-        <label for="date-picker" class="form-label mb-0">Date:</label>
-        <input type="date" id="date-picker"
-               class="form-control"
-               value="{{ selected_date.strftime('%Y-%m-%d') }}"
-               onchange="window.location.href='?date=' + this.value">
-        <a href="{{ url_for('production.production_history') }}" class="btn btn-green-outline">
-            View History
-        </a>
-    </div>
-    {% endif %}
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-display font-bold text-tea-green">
+        Daily Production Entry
+    </h1>
+    <span class="text-tea-muted">
+        {{ entry_date.strftime('%A, %B %d, %Y') }}
+    </span>
 </div>
 
 <div class="card">
     <form method="POST">
-        {{ form.hidden_tag() }}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <table class="data-table">
             <thead>
@@ -34,68 +27,42 @@
             </thead>
             <tbody>
                 {% for employee in employees %}
-                <tr x-data="wageRow('{{ employee.group }}')">
-                    <td>{{ employee.name }}</td>
-                    <td>
-                        <span class="badge badge-{{ employee.group }}">
-                            {{ employee.group|title }}
-                        </span>
-                    </td>
-                    <td>
-                        <input type="number"
-                               name="cartons_{{ employee.id }}"
-                               class="form-control"
-                               style="width: 100px;"
-                               min="0"
-                               x-model="cartons"
-                               x-on:input="cartons = $el.value">
-                    </td>
-                    <td class="currency" x-text="wageFormatted">
-                        ₦0.00
-                    </td>
-                </tr>
+                    {% set existing = existing_records.get(employee.id) %}
+                    <tr x-data="wageRow('{{ employee.group.value }}')">
+                        <td>{{ employee.name }}</td>
+                        <td>
+                            <span class="badge badge-{{ employee.group.value }}">
+                                {{ employee.group.value|title }}
+                            </span>
+                        </td>
+                        <td>
+                            <input type="number"
+                                   name="cartons_{{ employee.id }}"
+                                   x-model="cartons"
+                                   @input="cartons = $event.target.value"
+                                   class="form-control w-24"
+                                   min="0"
+                                   value="{{ existing.cartons if existing else 0 }}">
+                        </td>
+                        <td class="currency" x-text="wageFormatted">
+                            ₦{{ "{:,.2f}".format(existing.daily_wage) if existing else '0.00' }}
+                        </td>
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>
 
-        <div class="mt-4 d-flex justify-content-end">
-            <button type="submit" class="btn btn-gold">
-                Save Production
-            </button>
+        <div class="mt-6 flex justify-end">
+            <button type="submit" class="btn btn-gold">Save Production</button>
         </div>
     </form>
 </div>
 
-<div class="mt-4 card">
-    <h3 class="text-lg font-semibold mb-2">Wage Tiers (Production)</h3>
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Cartons</th>
-                <th>Rate per Carton</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>0 – 349</td>
-                <td class="currency">₦250</td>
-            </tr>
-            <tr>
-                <td>350 – 399</td>
-                <td class="currency">₦270</td>
-            </tr>
-            <tr>
-                <td>400 – 499</td>
-                <td class="currency">₦300</td>
-            </tr>
-            <tr>
-                <td>500+</td>
-                <td class="currency">₦320</td>
-            </tr>
-        </tbody>
-    </table>
-    <p class="mt-2 text-sm text-tea-muted">
-        <strong>Wrapping:</strong> Flat rate of ₦100 per carton.
-    </p>
-</div>
+{% if current_user.role.value == 'admin' %}
+    <div class="mt-4 text-center">
+        <a href="{{ url_for('production.history') }}" class="text-tea-muted hover:text-tea-green">
+            View Production History
+        </a>
+    </div>
+{% endif %}
 {% endblock %}

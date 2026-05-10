@@ -1,22 +1,25 @@
 """
-Hilltop Tea — Reports and PDF Export Blueprint.
+Hilltop Tea — Reports Blueprint.
 
-Handles PDF wage sheet generation using reportlab.
+PDF export functionality using reportlab.
 """
-from datetime import datetime
 from io import BytesIO
 
-from flask import Blueprint, make_response, render_template, request
-from flask_login import login_required
+from flask import Blueprint, make_response, request
+from flask_login import current_user, login_required
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import cm, mm
+from reportlab.lib.units import mm
 from reportlab.platypus import (
-    HRFlowable, PageBreak, SimpleDocTemplate, Spacer, Table, TableStyle
+    HRFlowable,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
 )
-from reportlab.platypus.paragraph import Paragraph
 
 from app import db
 from app.models import Employee, Payment, ProductionRecord
@@ -25,25 +28,28 @@ from app.utils import month_range
 reports_bp = Blueprint('reports', __name__)
 
 
-def get_payroll_data(first_day, last_day, group_filter=None):
+def _get_payroll_data(month_str: str, group_filter: str = None):
     """
     Get payroll data for PDF generation.
 
     Args:
-        first_day: First day of month (datetime).
-        last_day: Last day of month (datetime).
+        month_str: Month in 'YYYY-MM' format.
         group_filter: Optional filter by employee group.
 
     Returns:
-        List of payroll row dictionaries.
+        Tuple of (data list, grand totals dict).
     """
+    first_day, last_day = month_range(month_str)
+
+    from sqlalchemy import func
+
     query = db.session.query(
         Employee.id,
         Employee.name,
-        Employee.group,
-        db.func.coalesce(db.func.sum(ProductionRecord.cartons), 0).label('carton_total'),
-        db.func.coalesce(db.func.sum(ProductionRecord.daily_wage), 0).label('wage_total'),
-        db.func.coalesce(db.func.sum(Payment.amount), 0).label('paid_total')
+        Employee.worker_group,
+        func.coalesce(func.sum(ProductionRecord.cartons), 0).label('carton_total'),
+        func.coalesce(func.sum(ProductionRecord.daily_wage), 0).label('wage_total'),
+        func.coalesce(func.sum(Payment.amount), 0).label('paid_total'),
     ).outerjoin(
         ProductionRecord,
         (ProductionRecord.employee_id == Employee.id) &
@@ -57,48 +63,54 @@ def get_payroll_data(first_day, last_day, group_filter=None):
     ).group_by(Employee.id).order_by(Employee.name)
 
     if group_filter and group_filter in ('production', 'wrapping'):
-        query = query.filter(Employee.group == group_filter)
+        query = query.filter(Employee.worker_group == group_filter)
 
     results = query.all()
 
-    payroll_data = []
-    for row in results:
-        wage_total = float(row.wage_total)
-        paid_total = float(row.paid_total)
+    data = []
+    grand_wage = 0
+    grand_paid = 0
+    grand_cartons = 0
+
+    for emp_id, emp_name, emp_group, carton_total, wage_total, paid_total in results:
         balance = wage_total - paid_total
-
-        payroll_data.append({
-            'name': row.name,
-            'group': row.group,
-            'cartons': int(row.carton_total),
-            'wage': wage_total,
-            'paid': paid_total,
-            'balance': balance
+        data.append({
+            'name': emp_name,
+            'group': emp_group.value if emp_group else 'unknown',
+            'cartons': int(carton_total),
+            'wage': float(wage_total),
+            'paid': float(paid_total),
+            'balance': balance,
         })
+        grand_wage += wage_total
+        grand_paid += paid_total
+        grand_cartons += carton_total
 
-    return payroll_data
+    grand_balance = grand_wage - grand_paid
+
+    return data, {
+        'cartons': grand_cartons,
+        'wage': grand_wage,
+        'paid': grand_paid,
+        'balance': grand_balance,
+    }
 
 
-@reports_bp.route('/wage-sheet')
+@reports_bp.route('/wage-sheet.pdf')
 @login_required
 def wage_sheet_pdf():
     """
     Generate and stream a PDF wage sheet for the selected month.
 
-    Query parameters:
-        month: YYYY-MM string (required)
-        group: Optional filter by employee group
+    GET: Generate PDF and send as attachment.
     """
     month_str = request.args.get('month')
-    if not month_str:
-        return "Month parameter is required", 400
-
-    try:
-        first_day, last_day = month_range(month_str)
-    except ValueError:
-        return f"Invalid month format: {month_str}", 400
-
     group_filter = request.args.get('group')
+
+    if not month_str:
+        from flask import flash, redirect, url_for
+        flash_error('Month parameter is required.')
+        return redirect(url_for('payroll.index'))
 
     # ═══════════════════════════════════════════════════════════════
     # PPP: generate_wage_sheet_pdf(month_str, group_filter, user)
@@ -141,171 +153,181 @@ def wage_sheet_pdf():
     #   - No temp files written to disk (Vercel has no writable FS)
     # ═══════════════════════════════════════════════════════════════
 
-    # Get payroll data
-    payroll_data = get_payroll_data(first_day, last_day, group_filter)
+    from datetime import datetime
 
-    # Create PDF buffer
+    # Get payroll data
+    data, grand_totals = _get_payroll_data(month_str, group_filter)
+
+    # Create buffer
     buffer = BytesIO()
+
+    # Create document
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=20*mm,
         leftMargin=20*mm,
+        rightMargin=20*mm,
         topMargin=20*mm,
-        bottomMargin=20*mm
+        bottomMargin=20*mm,
     )
 
     # Get styles
     styles = getSampleStyleSheet()
+
+    # Custom styles
     title_style = ParagraphStyle(
-        'CustomTitle',
+        'Title',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
         fontSize=28,
         textColor=colors.HexColor('#1e3932'),
-        alignment=TA_CENTER,
-        spaceAfter=12
+        alignment=1,  # Center
+        spaceAfter=6,
     )
+
     subtitle_style = ParagraphStyle(
-        'CustomSubtitle',
+        'Subtitle',
         parent=styles['Heading2'],
-        fontName='Helvetica',
+        fontName='Helvetica-Bold',
         fontSize=14,
         textColor=colors.HexColor('#c9a96e'),
-        alignment=TA_CENTER,
-        spaceAfter=24
+        alignment=1,
+        spaceAfter=12,
     )
+
     normal_style = ParagraphStyle(
-        'CustomNormal',
+        'Normal',
         parent=styles['Normal'],
         fontName='Helvetica',
         fontSize=10,
-        spaceAfter=6
+        spaceAfter=6,
     )
+
     right_style = ParagraphStyle(
-        'CustomRight',
+        'Right',
         parent=normal_style,
-        alignment=TA_RIGHT
+        alignment=2,  # Right
     )
+
     footer_style = ParagraphStyle(
-        'CustomFooter',
+        'Footer',
         parent=styles['Normal'],
         fontName='Helvetica-Oblique',
         fontSize=8,
         textColor=colors.grey,
-        alignment=TA_CENTER
+        alignment=1,
     )
 
     # Build story
     story = []
 
     # Title
-    story.append(Paragraph("HILLTOP TEA", title_style))
-    story.append(Paragraph("MONTHLY WAGE SHEET", subtitle_style))
+    story.append(Paragraph('HILLTOP TEA', title_style))
+    story.append(Paragraph('MONTHLY WAGE SHEET', subtitle_style))
 
     # Month and metadata
-    month_name = first_day.strftime('%B %Y')
-    generated_date = datetime.now().strftime('%d %B %Y')
-    prepared_by = current_user.username if current_user.is_authenticated else 'System'
+    month_label = f'Month: {month_str}'
+    generated_date = f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}'
+    prepared_by = f'Prepared by: {current_user.username}'
 
-    meta_text = f"""
-    <b>Month:</b> {month_name}<br/>
-    <b>Generated:</b> {generated_date}<br/>
-    <b>Prepared by:</b> {prepared_by}
-    """
-    story.append(Paragraph(meta_text, right_style))
-    story.append(Spacer(1, 12))
+    story.append(Paragraph(month_label, right_style))
+    story.append(Paragraph(generated_date, right_style))
+    story.append(Paragraph(prepared_by, right_style))
+    story.append(Spacer(1, 6*mm))
 
     # Horizontal rule
     story.append(HRFlowable(width='100%', thickness=2, color=colors.HexColor('#1e3932')))
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 6*mm))
 
     # Build table data
-    table_data = [
-        ['S/N', 'Name', 'Group', 'Cartons', 'Wage (₦)', 'Paid (₦)', 'Balance (₦)']
-    ]
+    table_data = [['S/N', 'Name', 'Group', 'Cartons', 'Wage (₦)', 'Paid (₦)', 'Balance (₦)']]
 
-    grand_totals = {'cartons': 0, 'wage': 0, 'paid': 0, 'balance': 0}
-
-    for idx, row in enumerate(payroll_data, 1):
-        grand_totals['cartons'] += row['cartons']
-        grand_totals['wage'] += row['wage']
-        grand_totals['paid'] += row['paid']
-        grand_totals['balance'] += row['balance']
-
+    for idx, row in enumerate(data, 1):
         balance_color = colors.red if row['balance'] > 0 else colors.green
-
         table_data.append([
             str(idx),
             row['name'],
             row['group'].title(),
             str(row['cartons']),
-            f"₦{row['wage']:,.2f}",
-            f"₦{row['paid']:,.2f}",
-            f'<font color="{balance_color.hexval}">₦{row["balance"]:,.2f}</font>'
+            f'₦{row["wage"]:,.2f}',
+            f'₦{row["paid"]:,.2f}',
+            f'₦{row["balance"]:,.2f}',
         ])
 
     # Grand totals row
     table_data.append([
         '',
-        '<b>GRAND TOTALS</b>',
+        'GRAND TOTALS',
         '',
-        f'<b>{grand_totals["cartons"]}</b>',
-        f'<b>₦{grand_totals["wage"]:,.2f}</b>',
-        f'<b>₦{grand_totals["paid"]:,.2f}</b>',
-        f'<b>₦{grand_totals["balance"]:,.2f}</b>'
+        str(grand_totals['cartons']),
+        f'₦{grand_totals["wage"]:,.2f}',
+        f'₦{grand_totals["paid"]:,.2f}',
+        f'₦{grand_totals["balance"]:,.2f}',
     ])
 
     # Create table
-    table = Table(table_data, colWidths=[1*cm, 4*cm, 2*cm, 1.5*cm, 2.5*cm, 2.5*cm, 2.5*cm])
+    table = Table(table_data, colWidths=[20*mm, 40*mm, 20*mm, 15*mm, 25*mm, 25*mm, 25*mm])
 
     # Table style
     table_style = TableStyle([
+        # Header row
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3932')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+
+        # Data rows - alternating colors
+        ('BACKGROUND', (0, 1), (-1, -2), colors.white),
         ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f5f2eb')]),
-        ('FONTNAME', (4, 1), (6, -2), 'Courier'),
-        ('ALIGN', (4, 1), (6, -2), 'RIGHT'),
+
+        # Grand totals row
         ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#c9a96e')),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-    ])
-    table.setStyle(table_style)
 
+        # Alignment
+        ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # S/N
+        ('ALIGN', (1, 1), (2, -1), 'LEFT'),   # Name, Group
+        ('ALIGN', (3, 1), (3, -1), 'CENTER'),  # Cartons
+        ('ALIGN', (4, 1), (-1, -1), 'RIGHT'),  # Currency columns
+
+        # Borders
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#1e3932')),
+        ('LINEABOVE', (0, -1), (-1, -1), 1, colors.HexColor('#c9a96e')),
+    ])
+
+    table.setStyle(table_style)
     story.append(table)
-    story.append(Spacer(1, 40))
 
     # Signature block
-    signature_data = [
-        ['', ''],
-        ['Prepared by:', 'Date:'],
-        ['___________________', '___________________'],
-        ['', ''],
-        ['Authorised by:', 'Date:'],
-        ['___________________', '___________________'],
+    story.append(Spacer(1, 40*mm))
+
+    sig_data = [
+        ['Prepared by: _______________', 'Date: _______________'],
+        ['Authorised by: _______________', 'Date: _______________'],
     ]
-    signature_table = Table(signature_data, colWidths=[6*cm, 6*cm])
-    signature_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+    sig_table = Table(sig_data, colWidths=[80*mm, 40*mm])
+    sig_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
     ]))
-    story.append(signature_table)
+    story.append(sig_table)
 
     # Footer
-    story.append(Spacer(1, 20))
-    story.append(Paragraph("CONFIDENTIAL — HILLTOP TEA INTERNAL DOCUMENT", footer_style))
+    story.append(Spacer(1, 20*mm))
+    story.append(Paragraph('CONFIDENTIAL — HILLTOP TEA INTERNAL DOCUMENT', footer_style))
 
     # Build PDF
     doc.build(story)
 
-    # Prepare response
+    # Seek to beginning
     buffer.seek(0)
+
+    # Create response
     response = make_response(buffer.getvalue())
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'attachment; filename=hilltop_wage_{month_str}.pdf'

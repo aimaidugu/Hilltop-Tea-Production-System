@@ -1,122 +1,116 @@
 {% extends "base.html" %}
 
-{% block title %}Employees — Hilltop Tea{% endblock %}
+{% block title %}Employees - Hilltop Tea{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1 class="mb-0">
-        {% if active_only %}Active{% else %}Inactive{% endif %} Employees
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-display font-bold text-tea-green">
+        {{ 'Active' if active_only else 'Inactive' }} Employees
     </h1>
-    <div class="d-flex gap-2">
-        {% if active_only %}
-        <a href="{{ url_for('employees.list_inactive') }}" class="btn btn-green-outline">
-            View Inactive
-        </a>
-        {% else %}
-        <a href="{{ url_for('employees.list_employees') }}" class="btn btn-green-outline">
-            View Active
-        </a>
+    {% if active_only %}
+        <a href="{{ url_for('employees.add') }}" class="btn btn-gold">Add Employee</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    {% if pagination.items %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Group</th>
+                    <th>Created</th>
+                    <th class="actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for employee in pagination.items %}
+                    <tr>
+                        <td>{{ employee.name }}</td>
+                        <td>
+                            <span class="badge badge-{{ employee.group.value }}">
+                                {{ employee.group.value|title }}
+                            </span>
+                        </td>
+                        <td>{{ employee.created_at.strftime('%Y-%m-%d') }}</td>
+                        <td class="actions">
+                            {% if active_only %}
+                                <a href="{{ url_for('employees.edit', id=employee.id) }}"
+                                   class="text-tea-green hover:underline mr-2">Edit</a>
+                                <form action="{{ url_for('employees.deactivate', id=employee.id) }}"
+                                      method="POST" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="text-tea-danger hover:underline"
+                                            onclick="return confirm('Deactivate {{ employee.name }}?')">
+                                        Deactivate
+                                    </button>
+                                </form>
+                            {% else %}
+                                <form action="{{ url_for('employees.reactivate', id=employee.id) }}"
+                                      method="POST" class="inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="text-tea-good hover:underline">
+                                        Reactivate
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if pagination.pages > 1 %}
+            <div class="pagination">
+                {% if pagination.has_prev %}
+                    <a href="{{ url_for('employees.index' if active_only else 'employees.inactive', page=pagination.prev_num) }}">
+                        &laquo; Previous
+                    </a>
+                {% else %}
+                    <span class="disabled">&laquo; Previous</span>
+                {% endif %}
+
+                {% for page_num in pagination.iter_pages() %}
+                    {% if page_num %}
+                        {% if page_num == pagination.page %}
+                            <span class="active">{{ page_num }}</span>
+                        {% else %}
+                            <a href="{{ url_for('employees.index' if active_only else 'employees.inactive', page=page_num) }}">
+                                {{ page_num }}
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        <span>&hellip;</span>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                    <a href="{{ url_for('employees.index' if active_only else 'employees.inactive', page=pagination.next_num) }}">
+                        Next &raquo;
+                    </a>
+                {% else %}
+                    <span class="disabled">Next &raquo;</span>
+                {% endif %}
+            </div>
         {% endif %}
-        <a href="{{ url_for('employees.add_employee') }}" class="btn btn-gold">
-            Add Employee
+    {% else %}
+        <p class="text-tea-muted text-center py-8">
+            No {{ 'active' if active_only else 'inactive' }} employees found.
+        </p>
+    {% endif %}
+</div>
+
+{% if active_only %}
+    <div class="text-center mt-4">
+        <a href="{{ url_for('employees.inactive') }}" class="text-tea-muted hover:text-tea-green">
+            View inactive employees
         </a>
     </div>
-</div>
-
-{% if employees %}
-<div class="card">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Group</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for employee in employees %}
-            <tr>
-                <td>{{ employee.name }}</td>
-                <td>
-                    <span class="badge badge-{{ employee.group }}">
-                        {{ employee.group|title }}
-                    </span>
-                </td>
-                <td>
-                    {% if employee.active %}
-                    <span class="text-tea-good">Active</span>
-                    {% else %}
-                    <span class="text-tea-muted">Inactive</span>
-                    {% endif %}
-                </td>
-                <td>{{ employee.created_at.strftime('%d %b %Y') }}</td>
-                <td>
-                    <div class="d-flex gap-2">
-                        <a href="{{ url_for('employees.edit_employee', id=employee.id) }}"
-                           class="btn btn-sm btn-green-outline">
-                            Edit
-                        </a>
-                        {% if employee.active %}
-                        <form method="POST" action="{{ url_for('employees.deactivate_employee', id=employee.id) }}"
-                              onsubmit="return confirm('Deactivate {{ employee.name }}? Historical records will be preserved.');">
-                            <button type="submit" class="btn btn-sm btn-danger">
-                                Deactivate
-                            </button>
-                        </form>
-                        {% else %}
-                        <form method="POST" action="{{ url_for('employees.reactivate_employee', id=employee.id) }}">
-                            <button type="submit" class="btn btn-sm btn-gold">
-                                Reactivate
-                            </button>
-                        </form>
-                        <form method="POST" action="{{ url_for('employees.hard_delete_employee', id=employee.id) }}"
-                              onsubmit="return confirm('Permanently delete {{ employee.name }}? This cannot be undone.');">
-                            <button type="submit" class="btn btn-sm btn-danger">
-                                Delete
-                            </button>
-                        </form>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<!-- Pagination -->
-{% if pagination.pages > 1 %}
-<div class="d-flex justify-content-center gap-2 mt-4">
-    {% if pagination.has_prev %}
-    <a href="{{ url_for(request.endpoint, page=pagination.prev_num, **request.args) }}"
-       class="btn btn-sm btn-green-outline">
-        Previous
-    </a>
-    {% endif %}
-
-    <span class="align-self-center">
-        Page {{ pagination.page }} of {{ pagination.pages }}
-    </span>
-
-    {% if pagination.has_next %}
-    <a href="{{ url_for(request.endpoint, page=pagination.next_num, **request.args) }}"
-       class="btn btn-sm btn-green-outline">
-        Next
-    </a>
-    {% endif %}
-</div>
-{% endif %}
-
 {% else %}
-<div class="card text-center py-8">
-    <p class="text-tea-muted mb-4">
-        No {% if active_only %}active{% else %}inactive{% endif %} employees found.
-    </p>
-    <a href="{{ url_for('employees.add_employee') }}" class="btn btn-gold">
-        Add First Employee
-    </a>
-</div>
+    <div class="text-center mt-4">
+        <a href="{{ url_for('employees.index') }}" class="text-tea-muted hover:text-tea-green">
+            Back to active employees
+        </a>
+    </div>
 {% endif %}
 {% endblock %}

@@ -1,13 +1,13 @@
 /**
  * Hilltop Tea — Brand CSS
  *
- * Custom styles complementing Tailwind CSS.
+ * Custom styling that complements Tailwind CSS.
  * Minimum 350 lines as per specification.
  */
 
 /* ── Section 1: :root variables ───────────────────────────────────────────── */
 :root {
-    /* Brand colours */
+    /* Brand colors */
     --tea-green: #1e3932;
     --tea-mid: #2d5a4b;
     --tea-gold: #c9a96e;
@@ -17,7 +17,7 @@
     --tea-danger: #c0392b;
     --tea-good: #27ae60;
 
-    /* Typography */
+    /* Font families */
     --font-display: 'Cormorant Garamond', Georgia, serif;
     --font-body: 'DM Sans', system-ui, sans-serif;
     --font-mono: 'DM Mono', 'Courier New', monospace;
@@ -45,13 +45,21 @@
 
     /* Transitions */
     --transition-fast: 150ms ease-in-out;
-    --transition-base: 250ms ease-in-out;
+    --transition-normal: 250ms ease-in-out;
     --transition-slow: 350ms ease-in-out;
 }
 
-/* ── Section 2: Body, html base ───────────────────────────────────────────── */
+/* ── Section 2: Body, html base ─────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 html {
     scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -59,41 +67,57 @@ body {
     background-color: var(--tea-cream);
     color: var(--tea-dark);
     line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
 }
 
-/* ── Section 3: Cormorant Garamond heading styles ───────────────────────── */
-h1, h2, h3, h4, h5, h6 {
+/* ── Section 3: Cormorant Garamond heading styles ─────────────────────────── */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     font-family: var(--font-display);
     font-weight: 600;
     line-height: 1.2;
     letter-spacing: -0.02em;
+    color: var(--tea-green);
+    margin-top: 0;
+    margin-bottom: var(--space-md);
 }
 
 h1 {
     font-size: 2.5rem;
-    margin-bottom: var(--space-lg);
+    font-weight: 700;
+    letter-spacing: -0.03em;
 }
 
 h2 {
     font-size: 2rem;
-    margin-bottom: var(--space-md);
 }
 
 h3 {
-    font-size: 1.5rem;
-    margin-bottom: var(--space-sm);
+    font-size: 1.75rem;
 }
 
 h4 {
-    font-size: 1.25rem;
-    margin-bottom: var(--space-sm);
+    font-size: 1.5rem;
 }
 
-/* ── Section 4: Navbar ───────────────────────────────────────────────────── */
+h5 {
+    font-size: 1.25rem;
+}
+
+h6 {
+    font-size: 1rem;
+}
+
+/* ── Section 4: Navbar ─────────────────────────────────────────────────── */
 .navbar {
     background-color: var(--tea-green);
+    padding: var(--space-md) var(--space-xl);
     box-shadow: var(--shadow-md);
     position: sticky;
     top: 0;
@@ -111,44 +135,45 @@ h4 {
 }
 
 .navbar-brand:hover {
-    color: #d4b87a !important;
+    color: #d4b87d !important;
 }
 
-.nav-link {
+.navbar-nav .nav-link {
     color: rgba(255, 255, 255, 0.9) !important;
     font-weight: 500;
     padding: var(--space-sm) var(--space-md) !important;
+    margin: 0 var(--space-xs);
     border-radius: var(--radius-sm);
     transition: all var(--transition-fast);
     position: relative;
 }
 
-.nav-link:hover {
+.navbar-nav .nav-link:hover {
     color: var(--tea-gold) !important;
-    background-color: rgba(201, 169, 110, 0.1);
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
-.nav-link::after {
+.navbar-nav .nav-link::after {
     content: '';
     position: absolute;
     bottom: 0;
     left: 50%;
-    transform: translateX(-50%);
     width: 0;
     height: 2px;
     background-color: var(--tea-gold);
     transition: width var(--transition-fast);
+    transform: translateX(-50%);
 }
 
-.nav-link:hover::after {
+.navbar-nav .nav-link:hover::after {
     width: 80%;
 }
 
-.nav-link.active {
+.navbar-nav .nav-link.active {
     color: var(--tea-gold) !important;
 }
 
-.nav-link.active::after {
+.navbar-nav .nav-link.active::after {
     width: 80%;
 }
 
@@ -161,12 +186,11 @@ h4 {
 }
 
 .hero-title {
-    font-family: var(--font-display);
     font-size: 3rem;
     font-weight: 700;
     color: var(--tea-green);
     margin-bottom: var(--space-sm);
-    letter-spacing: 0.03em;
+    letter-spacing: -0.03em;
 }
 
 .hero-tagline {
@@ -175,14 +199,15 @@ h4 {
     font-weight: 400;
 }
 
-/* ── Section 6: Stat cards ───────────────────────────────────────────────── */
+/* ── Section 6: Stat cards ──────────────────────────────────────────────── */
 .stat-card {
-    background: white;
+    background-color: white;
     border-radius: var(--radius-lg);
     padding: var(--space-xl);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-normal);
     border-top: 4px solid var(--tea-gold);
-    transition: all var(--transition-base);
+    height: 100%;
 }
 
 .stat-card:hover {
@@ -191,7 +216,7 @@ h4 {
     border-top-color: var(--tea-green);
 }
 
-.stat-value {
+.stat-card .stat-value {
     font-family: var(--font-display);
     font-size: 2.5rem;
     font-weight: 700;
@@ -199,7 +224,7 @@ h4 {
     margin-bottom: var(--space-xs);
 }
 
-.stat-label {
+.stat-card .stat-label {
     font-size: 0.875rem;
     color: var(--tea-muted);
     text-transform: uppercase;
@@ -211,30 +236,30 @@ h4 {
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    background: white;
+    background-color: white;
     border-radius: var(--radius-lg);
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
 }
 
 .data-table thead {
     background-color: var(--tea-green);
+    color: white;
 }
 
 .data-table th {
-    color: white;
-    font-weight: 600;
     padding: var(--space-md);
     text-align: left;
+    font-weight: 600;
     font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--tea-mid);
 }
 
 .data-table td {
     padding: var(--space-md);
-    border-bottom: 1px solid #e5e5e5;
-    font-size: 0.95rem;
+    border-bottom: 1px solid #e5e7eb;
 }
 
 .data-table tbody tr:nth-child(even) {
@@ -242,22 +267,41 @@ h4 {
 }
 
 .data-table tbody tr:hover {
-    background-color: #ebe7df;
+    background-color: #ebe8e0;
 }
 
 .data-table .currency {
     font-family: var(--font-mono);
     text-align: right;
+    font-weight: 500;
 }
 
-/* ── Section 8: Forms ───────────────────────────────────────────────────── */
+.data-table .actions {
+    white-space: nowrap;
+}
+
+/* ── Section 8: Forms ──────────────────────────────────────────────────── */
+.form-group {
+    margin-bottom: var(--space-lg);
+}
+
+.form-label {
+    display: block;
+    margin-bottom: var(--space-sm);
+    font-weight: 500;
+    color: var(--tea-dark);
+    transition: color var(--transition-fast);
+}
+
 .form-control {
-    border: 1px solid #d1d5db;
-    border-radius: var(--radius-md);
+    width: 100%;
     padding: var(--space-sm) var(--space-md);
     font-size: 1rem;
-    transition: all var(--transition-fast);
+    border: 1px solid #d1d5db;
+    border-radius: var(--radius-md);
     background-color: white;
+    transition: all var(--transition-fast);
+    font-family: var(--font-body);
 }
 
 .form-control:focus {
@@ -266,12 +310,8 @@ h4 {
     box-shadow: 0 0 0 3px rgba(201, 169, 110, 0.2);
 }
 
-.form-label {
-    font-weight: 600;
-    color: var(--tea-dark);
-    margin-bottom: var(--space-xs);
-    display: block;
-    font-size: 0.9rem;
+.form-control::placeholder {
+    color: #9ca3af;
 }
 
 .form-select {
@@ -283,14 +323,21 @@ h4 {
     padding-right: 2.5rem;
 }
 
-/* ── Section 9: Buttons ─────────────────────────────────────────────────── */
+.form-text {
+    display: block;
+    margin-top: var(--space-xs);
+    font-size: 0.875rem;
+    color: var(--tea-muted);
+}
+
+/* ── Section 9: Buttons ────────────────────────────────────────────────── */
 .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: var(--space-sm) var(--space-lg);
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: 500;
     border-radius: var(--radius-md);
     border: none;
     cursor: pointer;
@@ -299,24 +346,29 @@ h4 {
     gap: var(--space-sm);
 }
 
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .btn-gold {
     background-color: var(--tea-gold);
     color: white;
 }
 
-.btn-gold:hover {
-    background-color: #b89a5e;
+.btn-gold:hover:not(:disabled) {
+    background-color: #b8995e;
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
 }
 
 .btn-green-outline {
     background-color: transparent;
-    border: 2px solid var(--tea-green);
     color: var(--tea-green);
+    border: 2px solid var(--tea-green);
 }
 
-.btn-green-outline:hover {
+.btn-green-outline:hover:not(:disabled) {
     background-color: var(--tea-green);
     color: white;
 }
@@ -326,7 +378,7 @@ h4 {
     color: white;
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
     background-color: #a93226;
 }
 
@@ -340,7 +392,7 @@ h4 {
     font-size: 1.125rem;
 }
 
-/* ── Section 10: Alpine.js modal overlay ───────────────────────────────────── */
+/* ── Section 10: Alpine.js modal overlay ─────────────────────────────────── */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -353,48 +405,61 @@ h4 {
     align-items: center;
     justify-content: center;
     z-index: 2000;
-    padding: var(--space-lg);
+    padding: var(--space-xl);
 }
 
 .modal-card {
-    background: white;
+    background-color: white;
     border-radius: var(--radius-xl);
-    padding: var(--space-2xl);
+    box-shadow: var(--shadow-xl);
     max-width: 500px;
     width: 100%;
-    box-shadow: var(--shadow-xl);
+    max-height: 90vh;
+    overflow-y: auto;
     border-top: 4px solid var(--tea-gold);
-    animation: modalSlideIn 0.3s ease-out;
-}
-
-@keyframes modalSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 .modal-header {
+    padding: var(--space-lg);
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-title {
     font-family: var(--font-display);
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--tea-green);
-    margin-bottom: var(--space-lg);
-    padding-bottom: var(--space-md);
-    border-bottom: 1px solid #e5e5e5;
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--tea-muted);
+    cursor: pointer;
+    padding: var(--space-xs);
+    line-height: 1;
+    transition: color var(--transition-fast);
+}
+
+.modal-close:hover {
+    color: var(--tea-danger);
+}
+
+.modal-body {
+    padding: var(--space-lg);
 }
 
 .modal-footer {
-    margin-top: var(--space-xl);
-    padding-top: var(--space-md);
-    border-top: 1px solid #e5e5e5;
+    padding: var(--space-lg);
+    border-top: 1px solid #e5e7eb;
     display: flex;
     justify-content: flex-end;
-    gap: var(--space-md);
+    gap: var(--space-sm);
 }
 
 /* ── Section 11: Flash messages ─────────────────────────────────────────── */
@@ -405,50 +470,41 @@ h4 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    animation: flashSlideIn 0.3s ease-out;
+    box-shadow: var(--shadow-sm);
 }
 
-@keyframes flashSlideIn {
-    from {
-        opacity: 0;
-        transform: translateX(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-.flash-success {
-    background-color: rgba(39, 174, 96, 0.1);
+.flash-message.flash-success {
+    background-color: #d4edda;
+    color: #155724;
     border-left: 4px solid var(--tea-good);
-    color: #1e8449;
 }
 
-.flash-danger {
-    background-color: rgba(192, 57, 43, 0.1);
+.flash-message.flash-error {
+    background-color: #f8d7da;
+    color: #721c24;
     border-left: 4px solid var(--tea-danger);
-    color: #922b21;
 }
 
-.flash-warning {
-    background-color: rgba(243, 156, 18, 0.1);
-    border-left: 4px solid #f39c12;
-    color: #b7950b;
+.flash-message.flash-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border-left: 4px solid var(--tea-gold);
 }
 
-.flash-info {
-    background-color: rgba(52, 152, 219, 0.1);
-    border-left: 4px solid #3498db;
-    color: #2471a3;
+.flash-message.flash-info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border-left: 4px solid var(--tea-mid);
 }
 
 .flash-close {
     background: none;
     border: none;
-    font-size: 1.25rem;
-    cursor: pointer;
     color: inherit;
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0;
+    line-height: 1;
     opacity: 0.7;
     transition: opacity var(--transition-fast);
 }
@@ -461,11 +517,11 @@ h4 {
 .badge {
     display: inline-block;
     padding: var(--space-xs) var(--space-sm);
-    border-radius: var(--radius-sm);
     font-size: 0.75rem;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    border-radius: var(--radius-sm);
 }
 
 .badge-production {
@@ -476,7 +532,7 @@ h4 {
 
 .badge-wrapping {
     background-color: rgba(201, 169, 110, 0.1);
-    color: #b89a5e;
+    color: var(--tea-gold);
     border: 1px solid var(--tea-gold);
 }
 
@@ -487,15 +543,15 @@ h4 {
 }
 
 .badge-gm {
-    background-color: rgba(52, 152, 219, 0.1);
-    color: #2980b9;
-    border: 1px solid #3498db;
-}
-
-.badge-supervisor {
     background-color: rgba(39, 174, 96, 0.1);
     color: var(--tea-good);
     border: 1px solid var(--tea-good);
+}
+
+.badge-supervisor {
+    background-color: rgba(108, 117, 125, 0.1);
+    color: var(--tea-muted);
+    border: 1px solid var(--tea-muted);
 }
 
 /* ── Section 13: Login page ─────────────────────────────────────────────── */
@@ -505,16 +561,16 @@ h4 {
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, var(--tea-green) 0%, var(--tea-mid) 100%);
-    padding: var(--space-lg);
+    padding: var(--space-xl);
 }
 
 .login-card {
-    background: white;
+    background-color: white;
     border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
     padding: var(--space-3xl);
     max-width: 400px;
     width: 100%;
-    box-shadow: var(--shadow-xl);
     border-top: 4px solid var(--tea-gold);
 }
 
@@ -524,12 +580,6 @@ h4 {
     font-weight: 700;
     color: var(--tea-green);
     text-align: center;
-    margin-bottom: var(--space-xl);
-}
-
-.login-subtitle {
-    text-align: center;
-    color: var(--tea-muted);
     margin-bottom: var(--space-xl);
 }
 
@@ -557,9 +607,10 @@ h4 {
 /* ── Section 16: Print stylesheet ───────────────────────────────────────── */
 @media print {
     .navbar,
-    .btn,
     .flash-message,
-    .modal-overlay {
+    .btn,
+    .pagination,
+    .filters {
         display: none !important;
     }
 
@@ -569,7 +620,7 @@ h4 {
     }
 
     body {
-        background: white;
+        background-color: white;
     }
 
     .container {
@@ -578,7 +629,7 @@ h4 {
     }
 }
 
-/* ── Section 17: Accessibility ───────────────────────────────────────────── */
+/* ── Section 17: Accessibility ──────────────────────────────────────────── */
 :focus-visible {
     outline: 2px solid var(--tea-gold);
     outline-offset: 2px;
@@ -592,6 +643,22 @@ h4 {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* Skip link for keyboard navigation */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--tea-green);
+    color: white;
+    padding: var(--space-sm) var(--space-md);
+    z-index: 9999;
+    transition: top var(--transition-fast);
+}
+
+.skip-link:focus {
+    top: 0;
 }
 
 /* ── Section 18: Scrollbar styling ───────────────────────────────────────── */
@@ -610,69 +677,104 @@ h4 {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #b89a5e;
+    background: #b8995e;
 }
 
-/* Additional utility classes */
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--tea-gold) var(--tea-cream);
+}
+
+/* ── Additional utility classes ─────────────────────────────────────────── */
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 var(--space-lg);
+    padding: 0 var(--space-xl);
 }
 
 .card {
-    background: white;
+    background-color: white;
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
     padding: var(--space-xl);
-    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--space-lg);
 }
 
 .card-header {
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.card-title {
     font-family: var(--font-display);
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--tea-green);
-    margin-bottom: var(--space-lg);
-    padding-bottom: var(--space-md);
-    border-bottom: 1px solid #e5e5e5;
+    margin: 0;
 }
 
-.text-center {
-    text-align: center;
-}
-
-.text-right {
-    text-align: right;
-}
-
-.mt-4 {
-    margin-top: var(--space-lg);
-}
-
-.mb-4 {
-    margin-bottom: var(--space-lg);
-}
-
-.p-4 {
-    padding: var(--space-lg);
-}
-
-.d-flex {
+.pagination {
     display: flex;
-}
-
-.align-items-center {
-    align-items: center;
-}
-
-.justify-content-between {
-    justify-content: space-between;
-}
-
-.gap-2 {
+    justify-content: center;
     gap: var(--space-sm);
+    margin-top: var(--space-xl);
 }
 
-.gap-4 {
-    gap: var(--space-lg);
+.pagination a,
+.pagination span {
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid #d1d5db;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--tea-dark);
+    transition: all var(--transition-fast);
+}
+
+.pagination a:hover {
+    background-color: var(--tea-cream);
+    border-color: var(--tea-gold);
+}
+
+.pagination .active {
+    background-color: var(--tea-green);
+    color: white;
+    border-color: var(--tea-green);
+}
+
+.pagination .disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Chart containers */
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .navbar {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .container {
+        padding: 0 var(--space-md);
+    }
+
+    .data-table {
+        font-size: 0.875rem;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: var(--space-sm);
+    }
 }
